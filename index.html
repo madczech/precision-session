@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Precision Session</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="login" hidden><form class="login panel" id="loginForm"><h1>Precision Session</h1><label class="field" for="passIn">Team passcode</label><input id="passIn" type="password" autocomplete="current-password" required><button class="primary" type="submit">Open</button><div class="status" id="loginMsg"></div></form></div>
+<div class="wrap" id="app" hidden>
+  <header>
+    <div>
+      <h1>Precision Session</h1>
+      <p class="sub">Launcher accuracy log. Pick the fireball, enter the launcher settings, load the 50 screenshots (5 shots per sector, sectors 1 → 10), check them and save the session.</p>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabS" aria-selected="true" type="button">Session</button>
+      <button role="tab" id="tabH" aria-selected="false" type="button">History</button>
+    </div>
+    <button type="button" id="logoutBtn" title="Forget the passcode on this device">Log out</button>
+  </header>
+  <div class="banner" id="storeBanner" hidden></div>
+
+  <!-- ================= SESSION ================= -->
+  <div id="viewS" class="wrap" style="padding:0;max-width:none">
+    <section class="panel">
+      <div class="panelhead"><h2>1 · Session setup</h2><span class="status" id="setupState"></span></div>
+      <div class="setup">
+        <div style="display:grid;gap:14px">
+          <div class="field">Fireball <span class="req" id="fbReq">Required. Choose before loading images.</span>
+            <div class="fbs" id="fbs">
+              <button type="button" class="fb" data-fb="2" aria-pressed="false" style="--fbc:var(--fb2)">FB 2<small>Fireball 2</small></button>
+              <button type="button" class="fb" data-fb="4" aria-pressed="false" style="--fbc:var(--fb4)">FB 4<small>Fireball 4</small></button>
+              <button type="button" class="fb" data-fb="5" aria-pressed="false" style="--fbc:var(--fb5)">FB 5<small>Fireball 5</small></button>
+            </div>
+          </div>
+          <div class="row4">
+            <label class="field">Date<input type="date" id="sDate"></label>
+            <label class="field">Operator<input type="text" id="sOp" placeholder="Name"></label>
+            <label class="field">PSI *<input type="number" id="sPsi" step="0.1" min="0" inputmode="decimal" placeholder="e.g. 11.5"></label>
+            <label class="field">Speed km/h *<input type="number" id="sSpeed" step="1" min="0" inputmode="decimal" placeholder="e.g. 90"></label>
+          </div>
+          <div class="row4">
+            <label class="field">Cyl. distance mm *<input type="number" id="sCyl" step="0.1" min="0" inputmode="decimal" placeholder="e.g. 210"></label>
+            <label class="field">R1 setting *<input type="number" id="sR1" step="any" inputmode="decimal" placeholder="R1"></label>
+            <label class="field">R2 setting *<input type="number" id="sR2" step="any" inputmode="decimal" placeholder="R2"></label>
+          </div>
+          <label class="field">Notes (fields marked * are required)<textarea id="sNotes" rows="2" placeholder="Anything unusual: weather, ball condition, launcher issues"></textarea></label>
+        </div>
+        <div>
+          <div class="field">Firing order (fixed): all 10 sectors, 5 shots each</div>
+          <div class="planboard" id="planBoard" style="margin-top:6px"></div>
+          <div class="plantext" id="planText"></div>
+                  </div>
+      </div>
+      <div class="savebar" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+        <div class="gate" id="gateMsg"></div>
+        <div class="actions">
+          <button class="primary" id="addBtn" type="button" disabled>Load screenshots</button>
+          <input id="fileIn" type="file" accept="image/*" multiple hidden>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panelhead">
+        <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap"><h2>2 · Check</h2><div class="counter" id="counter">0 <small>/ 50 shots</small></div><span class="status" id="status"></span></div>
+        <div class="toggles">
+          <label><input type="checkbox" id="tNums" checked> Shot numbers</label>
+          <label><input type="checkbox" id="tGrid" checked> Sector grid</label>
+        </div>
+      </div>
+      <div class="stage" id="stage"><canvas id="stageCv" width="1920" height="1080"></canvas></div>
+    </section>
+
+    <section class="panel" id="resultsPanel">
+      <div class="panelhead"><h2>Sector results</h2><span class="status" id="resStatus">Load screenshots to see how each sector did.</span></div>
+      <div class="kpis">
+        <div class="kpi"><div class="v" id="kPerfect">–</div><div class="l">sectors 5 / 5</div></div>
+        <div class="kpi"><div class="v" id="kHit">–</div><div class="l">hit rate</div></div>
+        <div class="kpi"><div class="v" id="kMiss">–</div><div class="l">avg miss cm</div></div>
+        <div class="kpi"><div class="v" id="kSpread">–</div><div class="l">spread cm</div></div>
+      </div>
+      <div class="sgrid" id="sgrid"></div>
+      <div class="legend"><span class="dot hit sample"></span> hit &nbsp; <span class="dot miss sample">2</span> miss (number = sector it landed in) &nbsp; <span class="dot none sample"></span> no ball found. Click a ball to open that shot. Spread = how tightly the 5 shots cluster.</div>
+    </section>
+
+    <section class="panel inspector" id="inspector" hidden>
+      <div class="panelhead" style="margin:0">
+        <h2 id="inspTitle">Shot</h2>
+        <div class="actions">
+          <button type="button" id="prevBtn">← Prev</button><button type="button" id="nextBtn">Next →</button>
+          <button type="button" id="noBallBtn">No ball</button><button type="button" id="autoBtn">Auto</button><button type="button" id="closeBtn">Close</button>
+        </div>
+      </div>
+      <canvas id="inspCv" width="1920" height="1080"></canvas>
+      <div class="foot">Click the ball to correct its position. Arrow keys step through shots.</div>
+    </section>
+
+    <section class="panel">
+      <details class="fold" id="shotsDet">
+        <summary><h2>Shot list</h2><span class="status" id="shotCount"></span></summary>
+        <div class="tablewrap">
+          <table><thead><tr><th class="num">#</th><th>File</th><th>Target</th><th>Sector</th><th class="num">x cm</th><th class="num">y cm</th><th class="num">Miss cm</th><th>Check</th></tr></thead><tbody id="tbody"></tbody></table>
+        </div>
+        <div class="empty" id="emptyMsg">No screenshots loaded yet.</div>
+      </details>
+    </section>
+
+    <section class="panel">
+      <div class="savebar">
+        <div><h2>3 · Save</h2><div class="status" id="saveState" style="margin-top:4px">Nothing to save yet.</div></div>
+        <div class="actions">
+          <button type="button" id="csvBtn">Save CSV</button>
+          <button type="button" id="imgBtn">Save image</button>
+          <button type="button" class="primary" id="saveBtn" disabled>Save session</button>
+          <button type="button" id="newBtn">New session</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <details class="cal" id="cal">
+        <summary>Grid calibration <span class="lock" id="lockPill">Locked</span></summary>
+        <p class="foot" style="margin-top:10px">Every saved session stores the grid it was measured with. Keep the grid locked so sessions stay comparable; unlock only when the camera or goal has moved.</p>
+        <div class="calgrid">
+          <label class="field">Columns<input id="gCols" type="number" min="1" max="8"></label>
+          <label class="field">Rows<input id="gRows" type="number" min="1" max="6"></label>
+          <label class="field">Numbering<select id="gOrder"><option value="row">Row by row</option><option value="col">Column by column</option></select></label>
+          <label class="field">Goal width cm<input id="gGW" type="number"></label>
+          <label class="field">Goal height cm<input id="gGH" type="number"></label>
+          <label class="field">Min. ball height cm<input id="gAir" type="number"></label>
+          <label class="field">Brightness threshold<input id="gTh" type="number" min="20" max="250"></label>
+          <label class="field">Borderline within cm<input id="gBd" type="number"></label>
+        </div>
+        <div class="actions" style="margin-top:14px">
+          <button type="button" id="lockBtn">Unlock grid</button>
+          <label class="toggles"><input type="checkbox" id="tEdit" disabled> <span style="color:var(--ink)">Drag goal corners on the image</span></label>
+          <button type="button" id="resetCorners" disabled>Reset corners</button>
+          <button type="button" id="rerunBtn" disabled>Re-run detection</button>
+          <button type="button" class="primary" id="saveGrid" disabled>Save grid &amp; lock</button>
+        </div>
+        <div class="status" id="gridState" style="margin-top:8px"></div>
+      </details>
+    </section>
+  </div>
+
+  <!-- ================= HISTORY ================= -->
+  <div id="viewH" class="wrap" style="padding:0;max-width:none" hidden>
+    <section class="panel">
+      <div class="panelhead">
+        <h2>Trend</h2>
+        <div class="actions">
+          <div class="chips" id="fbFilter">
+            <button type="button" data-f="all" aria-pressed="true">All</button>
+            <button type="button" data-f="2" aria-pressed="false">FB 2</button>
+            <button type="button" data-f="4" aria-pressed="false">FB 4</button>
+            <button type="button" data-f="5" aria-pressed="false">FB 5</button>
+          </div>
+          <label class="field" style="grid-auto-flow:column;align-items:center;gap:8px">Metric
+            <select id="metric" style="width:auto"><option value="hitRate">Hit rate %</option><option value="perfect">Sectors 5 / 5</option><option value="meanMiss">Avg miss cm</option><option value="spread">Spread cm</option></select></label>
+        </div>
+      </div>
+      <svg class="chart" id="chart" viewBox="0 0 900 260" role="img" aria-label="Trend of the chosen metric per session"></svg>
+      <div class="legend" id="chartLegend"></div>
+    </section>
+    <section class="panel">
+      <div class="panelhead"><h2>Sessions</h2><span class="status">Tick two sessions to compare them side by side.</span></div>
+      <div class="tablewrap">
+        <table><thead><tr><th></th><th>Date</th><th>Fireball</th><th class="num">PSI</th><th class="num">Speed</th><th class="num">Cyl. mm</th><th class="num">R1</th><th class="num">R2</th><th class="num">Shots</th><th class="num">5 / 5</th><th class="num">Hit rate</th><th class="num">Avg miss</th><th class="num">Spread</th><th>Operator</th></tr></thead><tbody id="hBody"></tbody></table>
+      </div>
+      <div class="empty" id="hEmpty">No saved sessions yet. Saved sessions appear here for everyone who uses this page.</div>
+    </section>
+    <section class="panel" id="cmpPanel" hidden>
+      <div class="panelhead"><h2 id="cmpTitle">Compare</h2><div class="toggles"><label><input type="checkbox" id="cNums" checked> Shot numbers</label></div></div>
+      <div class="cmp" id="cmpBox"></div>
+      <div class="tablewrap" style="margin-top:14px"><table id="cmpTable"></table></div>
+    </section>
+  </div>
+</div>
+<div class="drop" id="drop" hidden>Drop screenshots</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
