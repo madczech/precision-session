@@ -202,7 +202,13 @@
         </div>
         <label class="field">Notes<textarea id="eNotes" rows="2"></textarea></label>
       </div>
-      <div class="panelhead" style="margin:16px 0 8px"><h3>Shots</h3><div class="toggles"><label><input type="checkbox" id="eNums" checked> Shot numbers</label></div></div>
+      <div class="panelhead" style="margin:16px 0 8px"><h3>Shots</h3>
+        <div class="actions">
+          <div class="toggles"><label><input type="checkbox" id="eNums" checked> Shot numbers</label><label><input type="checkbox" id="eGridEdit"> <span style="color:var(--ink)">Adjust grid (drag corners)</span></label></div>
+          <button type="button" id="eGridShared" title="Replace this session's grid with the current shared grid">Use shared grid</button>
+          <button type="button" id="eGridReset" disabled>Reset grid</button>
+        </div>
+      </div>
       <div class="stage editing"><canvas id="eCv" width="1920" height="1080"></canvas></div>
       <div class="status" id="eHint" style="margin-top:8px"></div>
       <div class="kpis" style="margin-top:12px">

@@ -9,7 +9,8 @@ Penalty Arena launcher accuracy log. Live at https://precision-session.vercel.ap
   builds a stacked session image and per-sector results (5/5, hit rate, avg miss, spread).
 - Saves sessions to shared History: trend by fireball, side-by-side compare, CSV/image export.
 - Saved sessions can be edited from History: setup values, notes, shot targets, ball positions (click the stored image)
-  and "no ball". Stats are recalculated with the grid the session was saved with.
+  and "no ball". Stats are recalculated with the grid the session was saved with; that grid can also be adjusted
+  (drag its corners or take the shared grid), which re-measures every shot.
 
 ## Structure
 - `index.html`, `style.css`, `app.js` — the whole front end (no build step).

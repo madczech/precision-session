@@ -253,20 +253,21 @@ async function renderCompare(){const ss=picked.map(id=>sessions.find(s=>s._id===
 let ed=null;
 const eMeta=[['eDate','date'],['eOp','operator'],['ePsi','psi'],['eSpeed','speed'],['eCyl','cyl'],['eR1','r1'],['eR2','r2'],['eNotes','notes']];
 function openEdit(id){const s=sessions.find(x=>x._id===id);if(!s)return;
-  ed={id,src:s,fireball:s.fireball,shots:(s.shots||[]).map(q=>({...q,px:q.px?{...q.px}:null})),sel:-1,dirty:false,saving:false};
+  ed={id,src:s,fireball:s.fireball,shots:(s.shots||[]).map(q=>({...q,px:q.px?{...q.px}:null})),sel:-1,dirty:false,saving:false,grid:gridCopy(s.grid||G),gridChanged:false};$('eGridEdit').checked=false;
   eMeta.forEach(([el,k])=>$(el).value=s[k]??'');$('eTitle').textContent=`Edit session · FB ${s.fireball} · ${s.date||''}`;$('eState').textContent='';
   $('editPanel').hidden=false;$('cmpPanel').hidden=true;renderEdit();$('editPanel').scrollIntoView({behavior:'smooth',block:'start'});}
 function closeEdit(){ed=null;$('editPanel').hidden=true;$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';renderCompare();}
-// untouched shots keep their stored cm values; moved ones are re-measured with the grid the session was saved with
-function editRows(){const s=ed.src,g=s.grid||G,gg=geo(g,s.W||1920,s.H||1080);
+const gridCopy=g=>JSON.parse(JSON.stringify({cols:g.cols,rows:g.rows,order:g.order,gw:g.gw,gh:g.gh,corners:g.corners,air:g.air,th:g.th}));
+// untouched shots keep their stored cm values; moved ones (or all, once the grid changed) are re-measured with the session's grid
+function editRows(){const s=ed.src,g=ed.grid,gg=geo(g,s.W||1920,s.H||1080);
   return ed.shots.map((q,i)=>{const r={i,shot:q.n??i+1,file:q.file||'',target:q.target,flag:q.flag};if(!q.px)return r;
-    let x=q.x,y=q.y,sector=q.sector;if(q.moved||x==null||sector==null){[x,y]=apply(gg.toCm,q.px.x,q.px.y);sector=sectorOf(g,x,y);}
+    let x=q.x,y=q.y,sector=q.sector;if(q.moved||ed.gridChanged||x==null||sector==null){[x,y]=apply(gg.toCm,q.px.x,q.px.y);sector=sectorOf(g,x,y);}
     Object.assign(r,{x,y,sector,px:q.px});
     if(q.target){const[tx,ty]=sectorCentre(g,q.target);r.hit=sector===q.target;r.miss=Math.hypot(x-tx,y-ty);}return r;});}
 function editGate(){const miss=[];if(!ed.fireball)miss.push('fireball');if(!(+$('ePsi').value>0))miss.push('PSI');if(!(+$('eSpeed').value>0))miss.push('speed');if($('eCyl').value==='')miss.push('cylinder distance');if($('eR1').value==='')miss.push('R1');if($('eR2').value==='')miss.push('R2');
   const ok=!miss.length;$('eSave').disabled=!ok||!ed.dirty||ed.saving;$('eGate').textContent=ok?(ed.dirty?'Unsaved changes.':''):`Fill in first: ${miss.join(', ')}.`;
   document.querySelectorAll('#eFbs .fb').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.fb===ed.fireball)));return ok;}
-function renderEdit(){if(!ed)return;const s=ed.src,g=s.grid||G,rows=editRows(),st=stats(rows),N=nSect(g);
+function renderEdit(){if(!ed)return;const s=ed.src,g=ed.grid,rows=editRows(),st=stats(rows),N=nSect(g);
   const sum=sectorSummary(rows.map(r=>({n:r.shot,i:r.i,target:r.target,sector:r.sector??null})),g,s.perSector||5);
   $('eKPerfect').textContent=`${sum.perfect}/${sum.aimed}`;$('eKHit').textContent=st.hitRate==null?'–':Math.round(st.hitRate)+'%';$('eKMiss').textContent=fmt(st.meanMiss);$('eKSpread').textContent=fmt(st.spread);
   const sg=$('eSgrid');sg.style.setProperty('--cols',g.cols);sg.innerHTML=cardsHTML(sum,g,st.perSector,true);
@@ -274,15 +275,16 @@ function renderEdit(){if(!ed)return;const s=ed.src,g=s.grid||G,rows=editRows(),s
   $('eBody').innerHTML=rows.map(r=>{const hit=r.target&&r.sector?(r.hit?' <span class="pill hit">hit</span>':' <span class="pill bad">miss</span>'):'';
     return `<tr class="row${r.i===ed.sel?' sel':''}" data-i="${r.i}"><td class="num">${r.shot}</td><td>${esc(r.file)}</td><td><select data-i="${r.i}" aria-label="Target sector">${opt(r.target)}</select></td><td><span class="sec">${r.sector??'–'}</span>${hit}</td>`+
       `<td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${PILL[r.flag]||''}</td><td>${r.px?`<button type="button" data-nb="${r.i}" style="padding:2px 8px">No ball</button>`:''}</td></tr>`;}).join('');
-  const r=rows[ed.sel];$('eHint').textContent=r?`Shot ${r.shot} · target ${r.target??'–'} · landed ${r.sector??'–'}. Click the image where this ball is to move it.`:'Pick a shot (a dot in the sector cards or a row in the shot list), then click the image where its ball is.';
+  $('eGridReset').disabled=!ed.gridChanged;
+  const r=rows[ed.sel];$('eHint').textContent=$('eGridEdit').checked?'Drag the yellow corner handles onto the goal corners. Every shot is re-measured with the new grid.':r?`Shot ${r.shot} · target ${r.target??'–'} · landed ${r.sector??'–'}. Click the image where this ball is to move it.`:'Pick a shot (a dot in the sector cards or a row in the shot list), then click the image where its ball is.';
   drawEdit(rows);editGate();}
 async function drawEdit(rows){const s=ed.src,cv=$('eCv'),im=await loadImg(s.imageId);if(!ed||ed.src!==s)return;
   cv.width=s.W||1920;cv.height=s.H||1080;const x=cv.getContext('2d');if(im)x.drawImage(im,0,0,cv.width,cv.height);else noImage(x,cv);
-  overlay(x,s.grid||G,cv.width,cv.height,rows.filter(r=>r.px).map(r=>({n:r.shot,x:r.px.x,y:r.px.y,hl:r.i===ed.sel})),{grid:true,nums:$('eNums').checked,k:40});
+  overlay(x,ed.grid,cv.width,cv.height,rows.filter(r=>r.px).map(r=>({n:r.shot,x:r.px.x,y:r.px.y,hl:r.i===ed.sel})),{grid:true,nums:$('eNums').checked,edit:$('eGridEdit').checked,k:40});
   const p=rows[ed.sel]?.px;if(p){x.strokeStyle='#ffc400';x.lineWidth=4;x.beginPath();x.arc(p.x,p.y,cv.width/60,0,7);x.stroke();}}
 async function saveEdit(){if(!ed||!db||!editGate())return;ed.saving=true;editGate();$('eState').textContent='Saving…';
-  const s=ed.src,g=s.grid||G,rows=editRows(),st=stats(rows),{_id,...base}=s;
-  const doc={...base,fireball:ed.fireball,psi:+$('ePsi').value,speed:+$('eSpeed').value,cyl:+$('eCyl').value,r1:+$('eR1').value,r2:+$('eR2').value,date:$('eDate').value,operator:$('eOp').value.trim(),notes:$('eNotes').value.trim(),updatedAt:new Date().toISOString(),
+  const s=ed.src,g=ed.grid,rows=editRows(),st=stats(rows),{_id,...base}=s;
+  const doc={...base,grid:g,fireball:ed.fireball,psi:+$('ePsi').value,speed:+$('eSpeed').value,cyl:+$('eCyl').value,r1:+$('eR1').value,r2:+$('eR2').value,date:$('eDate').value,operator:$('eOp').value.trim(),notes:$('eNotes').value.trim(),updatedAt:new Date().toISOString(),
     stats:{perfect:sectorSummary(rows.map(r=>({n:r.shot,target:r.target,sector:r.sector??null})),g,s.perSector||5).perfect,balls:st.balls,aimed:st.aimed,hitRate:st.hitRate,meanMiss:st.meanMiss,spread:st.spread,perSector:st.perSector},
     shots:rows.map(r=>({n:r.shot,file:r.file,target:r.target??null,sector:r.sector??null,x:r.x!=null?+r.x.toFixed(1):null,y:r.y!=null?+r.y.toFixed(1):null,
       miss:r.miss!=null?+r.miss.toFixed(1):null,px:r.px?{x:Math.round(r.px.x),y:Math.round(r.px.y)}:null,flag:r.flag}))};
@@ -337,10 +339,19 @@ $('eBody').addEventListener('click',e=>{if(!ed)return;const nb=e.target.closest(
   if(nb){Object.assign(ed.shots[+nb.dataset.nb],{px:null,x:null,y:null,sector:null,miss:null,moved:false,flag:'excluded'});ed.dirty=true;renderEdit();return;}
   const tr=e.target.closest('tr[data-i]');if(tr&&e.target.tagName!=='SELECT'){ed.sel=+tr.dataset.i;renderEdit();}});
 $('eBody').addEventListener('change',e=>{if(!ed||e.target.tagName!=='SELECT')return;ed.shots[+e.target.dataset.i].target=e.target.value?+e.target.value:null;ed.dirty=true;renderEdit();});
-$('eCv').addEventListener('click',e=>{if(!ed)return;if(ed.sel<0){$('eHint').textContent='Pick a shot first: a dot in the sector cards or a row in the shot list.';return;}
+$('eCv').addEventListener('click',e=>{if(!ed||$('eGridEdit').checked)return;if(ed.sel<0){$('eHint').textContent='Pick a shot first: a dot in the sector cards or a row in the shot list.';return;}
   const[x,y]=cvPt(e.target,e);Object.assign(ed.shots[ed.sel],{px:{x:Math.round(x),y:Math.round(y)},moved:true,flag:'manual'});ed.dirty=true;renderEdit();});
 $('eCancel').onclick=()=>{if(ed&&ed.dirty&&$('eCancel').dataset.armed!=='1'){$('eCancel').dataset.armed='1';$('eCancel').textContent='Discard changes?';setTimeout(()=>{$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';},4000);return;}closeEdit();};
 $('eSave').onclick=saveEdit;
+$('eGridEdit').onchange=renderEdit;
+const setEditGrid=g=>{if(!ed)return;ed.grid=gridCopy(g);ed.gridChanged=true;ed.dirty=true;renderEdit();};
+$('eGridShared').onclick=()=>setEditGrid(G);
+$('eGridReset').onclick=()=>{if(!ed)return;ed.grid=gridCopy(ed.src.grid||G);ed.gridChanged=false;renderEdit();};
+let eDrag=-1;
+$('eCv').addEventListener('pointerdown',e=>{if(!ed||!$('eGridEdit').checked)return;const cv=e.target,[x,y]=cvPt(cv,e),g=geo(ed.grid,cv.width,cv.height);let best=-1,bd=cv.width/25;
+  g.px.forEach(([px,py],i)=>{const d=Math.hypot(px-x,py-y);if(d<bd){bd=d;best=i}});if(best>=0){eDrag=best;cv.setPointerCapture(e.pointerId);}});
+$('eCv').addEventListener('pointermove',e=>{if(eDrag<0||!ed)return;const cv=e.target,[x,y]=cvPt(cv,e);ed.grid.corners[eDrag]=[x/cv.width,y/cv.height];ed.gridChanged=true;ed.dirty=true;drawEdit(editRows());});
+$('eCv').addEventListener('pointerup',()=>{if(eDrag<0)return;eDrag=-1;renderEdit();});
 
 /* ---------- start ---------- */
 $('sDate').value=new Date().toISOString().slice(0,10);
