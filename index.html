@@ -207,10 +207,24 @@
           <div class="toggles"><label><input type="checkbox" id="eNums" checked> Shot numbers</label><label><input type="checkbox" id="eGridEdit"> <span style="color:var(--ink)">Adjust grid (drag corners)</span></label></div>
           <button type="button" id="eGridShared" title="Replace this session's grid with the current shared grid">Use shared grid</button>
           <button type="button" id="eGridReset" disabled>Reset grid</button>
+          <button type="button" id="eLoadBtn" title="Load the original screenshots of this session to check each shot">Load screenshots</button>
+          <input id="eFileIn" type="file" accept="image/*" multiple hidden>
         </div>
       </div>
+      <div class="status" id="eLoad" style="margin-bottom:8px"></div>
       <div class="stage editing"><canvas id="eCv" width="1920" height="1080"></canvas></div>
       <div class="status" id="eHint" style="margin-top:8px"></div>
+      <div class="inspector" id="eInsp" style="margin-top:14px" hidden>
+        <div class="panelhead" style="margin:0">
+          <h2 id="eInspTitle">Shot</h2>
+          <div class="actions">
+            <button type="button" id="eiPrev">← Prev</button><button type="button" id="eiNext">Next →</button>
+            <button type="button" id="eiNoBall">No ball</button><button type="button" id="eiAuto">Auto</button><button type="button" id="eiClose">Close</button>
+          </div>
+        </div>
+        <canvas id="eInspCv" width="1920" height="1080"></canvas>
+        <div class="foot">Click the ball to correct its position. Arrow keys step through shots.</div>
+      </div>
       <div class="kpis" style="margin-top:12px">
         <div class="kpi"><div class="v" id="eKPerfect">–</div><div class="l">sectors 5 / 5</div></div>
         <div class="kpi"><div class="v" id="eKHit">–</div><div class="l">hit rate</div></div>

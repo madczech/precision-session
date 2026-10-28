@@ -31,22 +31,22 @@ const work=document.createElement('canvas'),wctx=work.getContext('2d',{willReadF
 function minmax(src,w,h,rad,isMin){const tmp=new Float32Array(w*h),out=new Float32Array(w*h);
   for(let y=0;y<h;y++){const o=y*w;for(let x=0;x<w;x++){let m=isMin?1e9:-1e9;const a=Math.max(0,x-rad),b=Math.min(w-1,x+rad);for(let k=a;k<=b;k++){const v=src[o+k];if(isMin?v<m:v>m)m=v;}tmp[o+x]=m;}}
   for(let x=0;x<w;x++){for(let y=0;y<h;y++){let m=isMin?1e9:-1e9;const a=Math.max(0,y-rad),b=Math.min(h-1,y+rad);for(let k=a;k<=b;k++){const v=tmp[k*w+x];if(isMin?v<m:v>m)m=v;}out[y*w+x]=m;}}return out;}
-function detect(bmp){
+function detect(bmp,gd=G){
   const W=bmp.width,H=bmp.height,s=Math.min(1,960/W),sw=Math.round(W*s),sh=Math.round(H*s);
   work.width=sw;work.height=sh;wctx.drawImage(bmp,0,0,sw,sh);
-  const g=geo(G,W,H),xs=g.px.map(p=>p[0]*s),ys=g.px.map(p=>p[1]*s),gwPx=Math.max(...xs)-Math.min(...xs),rad=Math.max(2,Math.round(gwPx*0.0054));
+  const g=geo(gd,W,H),xs=g.px.map(p=>p[0]*s),ys=g.px.map(p=>p[1]*s),gwPx=Math.max(...xs)-Math.min(...xs),rad=Math.max(2,Math.round(gwPx*0.0054));
   const x0=Math.max(0,Math.floor(Math.min(...xs))-rad-2),x1=Math.min(sw-1,Math.ceil(Math.max(...xs))+rad+2),y0=Math.max(0,Math.floor(Math.min(...ys))-rad-2),y1=Math.min(sh-1,Math.ceil(Math.max(...ys))+rad+2);
   const w=x1-x0+1,h=y1-y0+1,d=wctx.getImageData(x0,y0,w,h).data,gr=new Float32Array(w*h);
   for(let i=0;i<w*h;i++)gr[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];
   const bl=new Float32Array(w*h);
   for(let y=0;y<h;y++)for(let x=0;x<w;x++){let t=0,n=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const yy=y+dy,xx=x+dx;if(yy>=0&&yy<h&&xx>=0&&xx<w){t+=gr[yy*w+xx];n++}}bl[y*w+x]=t/n;}
   const op=minmax(minmax(bl,w,h,rad,true),w,h,rad,false),lab=new Int32Array(w*h),stack=[],cands=[],rmin=gwPx*.0085,rmax=gwPx*.022;let id=0;
-  for(let i=0;i<w*h;i++){if(lab[i]||op[i]<G.th)continue;id++;lab[i]=id;stack.push(i);const px=[];
-    while(stack.length){const j=stack.pop();px.push(j);const x=j%w,y=(j/w)|0;for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=w||yy>=h)continue;const k=yy*w+xx;if(!lab[k]&&op[k]>=G.th){lab[k]=id;stack.push(k)}}}
+  for(let i=0;i<w*h;i++){if(lab[i]||op[i]<gd.th)continue;id++;lab[i]=id;stack.push(i);const px=[];
+    while(stack.length){const j=stack.pop();px.push(j);const x=j%w,y=(j/w)|0;for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]]){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=w||yy>=h)continue;const k=yy*w+xx;if(!lab[k]&&op[k]>=gd.th){lab[k]=id;stack.push(k)}}}
     if(px.length<20)continue;let sx=0,sy=0;for(const j of px){sx+=j%w;sy+=(j/w)|0}const cx=sx/px.length,cy=sy/px.length;
     let r=0;for(const j of px){const dx=j%w-cx,dy=((j/w)|0)-cy;r=Math.max(r,dx*dx+dy*dy)}r=Math.sqrt(r)+.5;const circ=px.length/(Math.PI*r*r);
     if(r<rmin||r>rmax||circ<.45)continue;const X=(cx+x0)/s,Y=(cy+y0)/s,[xc,yc]=apply(g.toCm,X,Y);
-    if(xc<0||xc>G.gw||yc>G.gh||yc<G.air)continue;cands.push({x:X,y:Y,r:r/s,circ});}
+    if(xc<0||xc>gd.gw||yc>gd.gh||yc<gd.air)continue;cands.push({x:X,y:Y,r:r/s,circ});}
   return cands.sort((a,b)=>b.circ-a.circ);}
 function makeCrop(bmp,p){const R=Math.ceil(p.r+3),c=document.createElement('canvas');c.width=c.height=2*R;const x=c.getContext('2d');
   x.drawImage(bmp,p.x-R,p.y-R,2*R,2*R,0,0,2*R,2*R);x.globalCompositeOperation='destination-in';const gd=x.createRadialGradient(R,R,p.r-1,R,R,p.r+2);
@@ -249,12 +249,14 @@ async function renderCompare(){const ss=picked.map(id=>sessions.find(s=>s._id===
   sectors.forEach(sec=>{h+=row(`Sector ${sec}: hits · miss · spread`,s=>{const p=s.stats?.perSector?.[sec];return p?`${p.hits}/${p.n} · ${fmt(p.meanMiss)} · ${fmt(p.spread)}`:'–';});});
   $('cmpTable').innerHTML=h+'</tbody>';}
 
-/* ---------- edit saved session (no screenshots kept: works on stored ball positions + stacked image) ---------- */
-let ed=null;
+/* ---------- edit saved session (screenshots are not stored: works on stored ball positions + stacked image,
+   or on the original screenshots when they are loaded again; then the stacked image is rebuilt on save) ---------- */
+let ed=null,eInspTok=0;
+const E_LOAD_TIP='Missing or wrong ball? Load the original screenshots of this session (button or drop) to check each shot like in the Session tab.';
 const eMeta=[['eDate','date'],['eOp','operator'],['ePsi','psi'],['eSpeed','speed'],['eCyl','cyl'],['eR1','r1'],['eR2','r2'],['eNotes','notes']];
 function openEdit(id){const s=sessions.find(x=>x._id===id);if(!s)return;
   ed={id,src:s,fireball:s.fireball,shots:(s.shots||[]).map(q=>({...q,px:q.px?{...q.px}:null})),sel:-1,dirty:false,saving:false,grid:gridCopy(s.grid||G),gridChanged:false};$('eGridEdit').checked=false;
-  eMeta.forEach(([el,k])=>$(el).value=s[k]??'');$('eTitle').textContent=`Edit session · FB ${s.fireball} · ${s.date||''}`;$('eState').textContent='';
+  eMeta.forEach(([el,k])=>$(el).value=s[k]??'');$('eTitle').textContent=`Edit session · FB ${s.fireball} · ${s.date||''}`;$('eState').textContent='';$('eLoad').textContent=E_LOAD_TIP;
   $('editPanel').hidden=false;$('cmpPanel').hidden=true;renderEdit();$('editPanel').scrollIntoView({behavior:'smooth',block:'start'});}
 function closeEdit(){ed=null;$('editPanel').hidden=true;$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';renderCompare();}
 const gridCopy=g=>JSON.parse(JSON.stringify({cols:g.cols,rows:g.rows,order:g.order,gw:g.gw,gh:g.gh,corners:g.corners,air:g.air,th:g.th}));
@@ -265,7 +267,7 @@ function editRows(){const s=ed.src,g=ed.grid,gg=geo(g,s.W||1920,s.H||1080);
     Object.assign(r,{x,y,sector,px:q.px});
     if(q.target){const[tx,ty]=sectorCentre(g,q.target);r.hit=sector===q.target;r.miss=Math.hypot(x-tx,y-ty);}return r;});}
 function editGate(){const miss=[];if(!ed.fireball)miss.push('fireball');if(!(+$('ePsi').value>0))miss.push('PSI');if(!(+$('eSpeed').value>0))miss.push('speed');if($('eCyl').value==='')miss.push('cylinder distance');if($('eR1').value==='')miss.push('R1');if($('eR2').value==='')miss.push('R2');
-  const ok=!miss.length;$('eSave').disabled=!ok||!ed.dirty||ed.saving;$('eGate').textContent=ok?(ed.dirty?'Unsaved changes.':''):`Fill in first: ${miss.join(', ')}.`;
+  const ok=!miss.length;$('eSave').disabled=!ok||!ed.dirty||ed.saving||ed.loading;$('eLoadBtn').disabled=!!ed.loading;$('eGate').textContent=ok?(ed.dirty?'Unsaved changes.':''):`Fill in first: ${miss.join(', ')}.`;
   document.querySelectorAll('#eFbs .fb').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.fb===ed.fireball)));return ok;}
 function renderEdit(){if(!ed)return;const s=ed.src,g=ed.grid,rows=editRows(),st=stats(rows),N=nSect(g);
   const sum=sectorSummary(rows.map(r=>({n:r.shot,i:r.i,target:r.target,sector:r.sector??null})),g,s.perSector||5);
@@ -277,19 +279,48 @@ function renderEdit(){if(!ed)return;const s=ed.src,g=ed.grid,rows=editRows(),st=
       `<td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${PILL[r.flag]||''}</td><td>${r.px?`<button type="button" data-nb="${r.i}" style="padding:2px 8px">No ball</button>`:''}</td></tr>`;}).join('');
   $('eGridReset').disabled=!ed.gridChanged;
   const r=rows[ed.sel];$('eHint').textContent=$('eGridEdit').checked?'Drag the yellow corner handles onto the goal corners. Every shot is re-measured with the new grid.':r?`Shot ${r.shot} · target ${r.target??'–'} · landed ${r.sector??'–'}. Click the image where this ball is to move it.`:'Pick a shot (a dot in the sector cards or a row in the shot list), then click the image where its ball is.';
-  drawEdit(rows);editGate();}
-async function drawEdit(rows){const s=ed.src,cv=$('eCv'),im=await loadImg(s.imageId);if(!ed||ed.src!==s)return;
-  cv.width=s.W||1920;cv.height=s.H||1080;const x=cv.getContext('2d');if(im)x.drawImage(im,0,0,cv.width,cv.height);else noImage(x,cv);
+  $('eInsp').hidden=!ed.shots[ed.sel]?.img;drawEdit(rows);drawEditInsp(rows);editGate();}
+function composeEdit(cv){cv.width=ed.base.width;cv.height=ed.base.height;const x=cv.getContext('2d');x.drawImage(ed.base,0,0);
+  ed.shots.forEach(q=>{if(q.px&&q.crop){const R=q.crop.width/2;x.drawImage(q.crop,q.px.x-R,q.px.y-R);}});return cv;}
+async function drawEdit(rows){const s=ed.src,cv=$('eCv'),im=ed.base?null:await loadImg(s.imageId);if(!ed||ed.src!==s)return;const x=cv.getContext('2d');
+  if(ed.base)composeEdit(cv);else{cv.width=s.W||1920;cv.height=s.H||1080;if(im)x.drawImage(im,0,0,cv.width,cv.height);else noImage(x,cv);}
   overlay(x,ed.grid,cv.width,cv.height,rows.filter(r=>r.px).map(r=>({n:r.shot,x:r.px.x,y:r.px.y,hl:r.i===ed.sel})),{grid:true,nums:$('eNums').checked,edit:$('eGridEdit').checked,k:40});
   const p=rows[ed.sel]?.px;if(p){x.strokeStyle='#ffc400';x.lineWidth=4;x.beginPath();x.arc(p.x,p.y,cv.width/60,0,7);x.stroke();}}
+async function drawEditInsp(rows){const q=ed.shots[ed.sel];if(!q||!q.img)return;const tok=++eInspTok,bmp=await createImageBitmap(q.img);if(tok!==eInspTok||!ed){bmp.close&&bmp.close();return;}
+  const cv=$('eInspCv');cv.width=bmp.width;cv.height=bmp.height;const x=cv.getContext('2d');x.drawImage(bmp,0,0);bmp.close&&bmp.close();drawGrid(x,ed.grid,cv.width,cv.height,false);
+  (q.auto||[]).forEach(c=>{if(q.px&&Math.hypot(c.x-q.px.x,c.y-q.px.y)<2)return;x.strokeStyle='rgba(255,255,255,.6)';x.setLineDash([8,6]);x.lineWidth=3;x.beginPath();x.arc(c.x,c.y,c.r+8,0,7);x.stroke();});
+  x.setLineDash([]);if(q.px){x.strokeStyle='#ff3b30';x.lineWidth=5;x.beginPath();x.arc(q.px.x,q.px.y,(q.px.r||cv.width/85)+8,0,7);x.stroke();}
+  const r=rows[ed.sel];$('eInspTitle').textContent=`Shot ${r.shot} · target ${r.target??'–'} · landed ${r.sector??'–'}`;}
+const medianR=()=>{const rs=ed.shots.filter(q=>q.px&&q.px.r).map(q=>q.px.r).sort((a,b)=>a-b);return rs.length?rs[rs.length>>1]:(ed.src.W||1920)/85;};
+async function setEditPos(i,pos,flag){const q=ed.shots[i];q.px=pos?{x:Math.round(pos.x),y:Math.round(pos.y),r:pos.r||medianR()}:null;q.moved=true;q.flag=flag;q.crop=null;
+  if(!pos)Object.assign(q,{x:null,y:null,sector:null,miss:null});
+  else if(q.img){const bmp=await createImageBitmap(q.img);q.crop=makeCrop(bmp,q.px);bmp.close&&bmp.close();}
+  ed.dirty=true;renderEdit();}
+// match the screenshots to the stored shots by file name (or by order when the names differ), detect balls, cut the ball crops
+async function loadEditShots(list){if(!ed||ed.loading)return;const E=ed,s=E.src,W=s.W||1920,H=s.H||1080;
+  const files=[...list].filter(f=>/^image\//.test(f.type)||/\.(png|jpe?g|webp)$/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  const byName=new Map(files.map(f=>[f.name,f]));let pick=E.shots.map(q=>byName.get(q.file)),note='';
+  if(pick.some(f=>!f)){if(files.length!==E.shots.length){$('eLoad').textContent=`Only ${pick.filter(Boolean).length} of ${E.shots.length} shots match a file name. Load the screenshots this session was made from.`;return;}pick=files;note=' File names differ, so they were matched in order.';}
+  E.loading=true;editGate();const out=[];let base=null;
+  try{for(let i=0;i<pick.length;i++){$('eLoad').textContent=`Analysing ${i+1} / ${pick.length}…`;const q=E.shots[i],bmp=await createImageBitmap(pick[i]);
+      if(bmp.width!==W||bmp.height!==H){bmp.close&&bmp.close();throw new Error(`${pick[i].name} is ${bmp.width}×${bmp.height}, but the session was made from ${W}×${H} screenshots`);}
+      if(i===0){base=document.createElement('canvas');base.width=W;base.height=H;base.getContext('2d').drawImage(bmp,0,0);}
+      const auto=detect(bmp,{...G,...E.grid});let px=q.px&&{...q.px},crop=null;
+      if(px){const near=auto.find(c=>Math.hypot(c.x-px.x,c.y-px.y)<c.r*1.5);px.r=near?near.r:(auto[0]?.r||W/85);crop=makeCrop(bmp,px);}
+      bmp.close&&bmp.close();out.push({img:pick[i],auto,px,crop});if(ed!==E)return;}}
+  catch(e){E.loading=false;if(ed===E){$('eLoad').innerHTML=`<span style="color:var(--bad)">${esc(e.message)}</span>`;editGate();}return;}
+  if(ed!==E)return;out.forEach((o,i)=>Object.assign(E.shots[i],o));E.base=base;E.loading=false;
+  $('eLoad').textContent=`Screenshots loaded.${note} Pick a shot to check it on its own screenshot; saving rebuilds the session image.`;renderEdit();}
 async function saveEdit(){if(!ed||!db||!editGate())return;ed.saving=true;editGate();$('eState').textContent='Saving…';
-  const s=ed.src,g=ed.grid,rows=editRows(),st=stats(rows),{_id,...base}=s;
-  const doc={...base,grid:g,fireball:ed.fireball,psi:+$('ePsi').value,speed:+$('eSpeed').value,cyl:+$('eCyl').value,r1:+$('eR1').value,r2:+$('eR2').value,date:$('eDate').value,operator:$('eOp').value.trim(),notes:$('eNotes').value.trim(),updatedAt:new Date().toISOString(),
+  const s=ed.src,g=ed.grid,rows=editRows(),st=stats(rows),{_id,...base}=s;let imageId=s.imageId;
+  if(ed.base){try{imageId=(await assets.upload(await canvasBlob(composeEdit(document.createElement('canvas'))))).id;}
+    catch(e){ed.saving=false;editGate();$('eState').innerHTML=`<span style="color:var(--bad)">Not saved: the session image could not be stored (${esc(e&&e.message||'storage error')}). Try again.</span>`;return;}}
+  const doc={...base,imageId,grid:g,fireball:ed.fireball,psi:+$('ePsi').value,speed:+$('eSpeed').value,cyl:+$('eCyl').value,r1:+$('eR1').value,r2:+$('eR2').value,date:$('eDate').value,operator:$('eOp').value.trim(),notes:$('eNotes').value.trim(),updatedAt:new Date().toISOString(),
     stats:{perfect:sectorSummary(rows.map(r=>({n:r.shot,target:r.target,sector:r.sector??null})),g,s.perSector||5).perfect,balls:st.balls,aimed:st.aimed,hitRate:st.hitRate,meanMiss:st.meanMiss,spread:st.spread,perSector:st.perSector},
     shots:rows.map(r=>({n:r.shot,file:r.file,target:r.target??null,sector:r.sector??null,x:r.x!=null?+r.x.toFixed(1):null,y:r.y!=null?+r.y.toFixed(1):null,
       miss:r.miss!=null?+r.miss.toFixed(1):null,px:r.px?{x:Math.round(r.px.x),y:Math.round(r.px.y)}:null,flag:r.flag}))};
-  try{await db.collection('sessions').doc(ed.id).set(doc);closeEdit();}
-  catch(e){ed.saving=false;editGate();$('eState').innerHTML=`<span style="color:var(--bad)">Not saved: ${esc(e&&e.message||'storage error')}. Try again.</span>`;}}
+  try{await db.collection('sessions').doc(ed.id).set(doc);if(s.imageId&&imageId!==s.imageId){try{await assets.delete(s.imageId)}catch(e){}}closeEdit();}
+  catch(e){if(imageId!==s.imageId){try{await assets.delete(imageId)}catch(e2){}}ed.saving=false;editGate();$('eState').innerHTML=`<span style="color:var(--bad)">Not saved: ${esc(e&&e.message||'storage error')}. Try again.</span>`;}}
 
 /* ---------- export ---------- */
 let dl=null;
@@ -309,10 +340,10 @@ document.querySelectorAll('#fbs .fb').forEach(b=>b.onclick=()=>{cur.fireball=+b.
 $('addBtn').onclick=()=>$('fileIn').click();
 $('fileIn').onchange=e=>{if(e.target.files.length)loadFiles(e.target.files);e.target.value='';};
 let dragN=0;
-addEventListener('dragenter',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')&&!$('viewS').hidden){dragN++;$('drop').hidden=false;}});
+addEventListener('dragenter',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')&&(!$('viewS').hidden||(ed&&!$('viewH').hidden))){dragN++;$('drop').hidden=false;}});
 addEventListener('dragleave',()=>{dragN=Math.max(0,dragN-1);if(!dragN)$('drop').hidden=true;});
 addEventListener('dragover',e=>e.preventDefault());
-addEventListener('drop',e=>{e.preventDefault();dragN=0;$('drop').hidden=true;if(e.dataTransfer.files.length){if(gate())loadFiles(e.dataTransfer.files);else $('gateMsg').scrollIntoView({block:'center'});}});
+addEventListener('drop',e=>{e.preventDefault();dragN=0;$('drop').hidden=true;if(e.dataTransfer.files.length){if(ed&&!$('viewH').hidden)loadEditShots(e.dataTransfer.files);else if(gate())loadFiles(e.dataTransfer.files);else $('gateMsg').scrollIntoView({block:'center'});}});
 ['tNums','tGrid'].forEach(id=>$(id).addEventListener('change',render));
 $('saveBtn').onclick=saveSession;
 $('sgrid').addEventListener('click',e=>{const b=e.target.closest('button.dot');if(!b)return;openInspector(+b.dataset.i);$('inspector').scrollIntoView({behavior:'smooth',block:'start'});});
@@ -334,13 +365,13 @@ $('metric').onchange=()=>renderChart(shownSessions());$('cNums').onchange=render
 document.querySelectorAll('#eFbs .fb').forEach(b=>b.onclick=()=>{if(!ed)return;ed.fireball=+b.dataset.fb;ed.dirty=true;editGate();});
 eMeta.forEach(([id])=>$(id).addEventListener('input',()=>{if(!ed)return;ed.dirty=true;editGate();}));
 $('eNums').onchange=renderEdit;
-$('eSgrid').addEventListener('click',e=>{const b=e.target.closest('button.dot');if(!b||!ed)return;ed.sel=+b.dataset.i;renderEdit();$('eCv').scrollIntoView({behavior:'smooth',block:'nearest'});});
+$('eSgrid').addEventListener('click',e=>{const b=e.target.closest('button.dot');if(!b||!ed)return;ed.sel=+b.dataset.i;renderEdit();$(ed.shots[ed.sel].img?'eInsp':'eCv').scrollIntoView({behavior:'smooth',block:'nearest'});});
 $('eBody').addEventListener('click',e=>{if(!ed)return;const nb=e.target.closest('button[data-nb]');
-  if(nb){Object.assign(ed.shots[+nb.dataset.nb],{px:null,x:null,y:null,sector:null,miss:null,moved:false,flag:'excluded'});ed.dirty=true;renderEdit();return;}
+  if(nb){setEditPos(+nb.dataset.nb,null,'excluded');return;}
   const tr=e.target.closest('tr[data-i]');if(tr&&e.target.tagName!=='SELECT'){ed.sel=+tr.dataset.i;renderEdit();}});
 $('eBody').addEventListener('change',e=>{if(!ed||e.target.tagName!=='SELECT')return;ed.shots[+e.target.dataset.i].target=e.target.value?+e.target.value:null;ed.dirty=true;renderEdit();});
 $('eCv').addEventListener('click',e=>{if(!ed||$('eGridEdit').checked)return;if(ed.sel<0){$('eHint').textContent='Pick a shot first: a dot in the sector cards or a row in the shot list.';return;}
-  const[x,y]=cvPt(e.target,e);Object.assign(ed.shots[ed.sel],{px:{x:Math.round(x),y:Math.round(y)},moved:true,flag:'manual'});ed.dirty=true;renderEdit();});
+  const[x,y]=cvPt(e.target,e);setEditPos(ed.sel,{x,y},'manual');});
 $('eCancel').onclick=()=>{if(ed&&ed.dirty&&$('eCancel').dataset.armed!=='1'){$('eCancel').dataset.armed='1';$('eCancel').textContent='Discard changes?';setTimeout(()=>{$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';},4000);return;}closeEdit();};
 $('eSave').onclick=saveEdit;
 $('eGridEdit').onchange=renderEdit;
@@ -352,6 +383,15 @@ $('eCv').addEventListener('pointerdown',e=>{if(!ed||!$('eGridEdit').checked)retu
   g.px.forEach(([px,py],i)=>{const d=Math.hypot(px-x,py-y);if(d<bd){bd=d;best=i}});if(best>=0){eDrag=best;cv.setPointerCapture(e.pointerId);}});
 $('eCv').addEventListener('pointermove',e=>{if(eDrag<0||!ed)return;const cv=e.target,[x,y]=cvPt(cv,e);ed.grid.corners[eDrag]=[x/cv.width,y/cv.height];ed.gridChanged=true;ed.dirty=true;drawEdit(editRows());});
 $('eCv').addEventListener('pointerup',()=>{if(eDrag<0)return;eDrag=-1;renderEdit();});
+$('eLoadBtn').onclick=()=>$('eFileIn').click();
+$('eFileIn').onchange=e=>{if(e.target.files.length)loadEditShots(e.target.files);e.target.value='';};
+$('eInspCv').addEventListener('click',e=>{const q=ed&&ed.shots[ed.sel];if(!q||!q.img)return;const[x,y]=cvPt(e.target,e);
+  const near=(q.auto||[]).find(c=>Math.hypot(c.x-x,c.y-y)<c.r*1.5);setEditPos(ed.sel,near||{x,y},'manual');});
+$('eiNoBall').onclick=()=>{if(ed&&ed.sel>=0)setEditPos(ed.sel,null,'excluded');};
+$('eiAuto').onclick=()=>{const q=ed&&ed.shots[ed.sel];if(!q||!q.auto)return;setEditPos(ed.sel,q.auto[0]||null,q.auto.length>1?'multiple':q.auto.length?'ok':'no ball');};
+$('eiPrev').onclick=()=>{if(ed&&ed.sel>0){ed.sel--;renderEdit();}};$('eiNext').onclick=()=>{if(ed&&ed.sel<ed.shots.length-1){ed.sel++;renderEdit();}};
+$('eiClose').onclick=()=>{if(!ed)return;ed.sel=-1;renderEdit();};
+addEventListener('keydown',e=>{if(!ed||ed.sel<0||$('eInsp').hidden||$('viewH').hidden||/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))return;if(e.key==='ArrowRight')$('eiNext').click();if(e.key==='ArrowLeft')$('eiPrev').click();if(e.key==='Escape')$('eiClose').click();});
 
 /* ---------- start ---------- */
 $('sDate').value=new Date().toISOString().slice(0,10);
