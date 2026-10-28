@@ -179,6 +179,53 @@
       <div class="cmp" id="cmpBox"></div>
       <div class="tablewrap" style="margin-top:14px"><table id="cmpTable"></table></div>
     </section>
+    <section class="panel" id="editPanel" hidden>
+      <div class="panelhead"><h2 id="eTitle">Edit session</h2><span class="status" id="eState"></span></div>
+      <div style="display:grid;gap:14px">
+        <div class="field">Fireball
+          <div class="fbs" id="eFbs">
+            <button type="button" class="fb" data-fb="2" aria-pressed="false" style="--fbc:var(--fb2)">FB 2<small>Fireball 2</small></button>
+            <button type="button" class="fb" data-fb="4" aria-pressed="false" style="--fbc:var(--fb4)">FB 4<small>Fireball 4</small></button>
+            <button type="button" class="fb" data-fb="5" aria-pressed="false" style="--fbc:var(--fb5)">FB 5<small>Fireball 5</small></button>
+          </div>
+        </div>
+        <div class="row4">
+          <label class="field">Date<input type="date" id="eDate"></label>
+          <label class="field">Operator<input type="text" id="eOp" placeholder="Name"></label>
+          <label class="field">PSI *<input type="number" id="ePsi" step="0.1" min="0" inputmode="decimal"></label>
+          <label class="field">Speed km/h *<input type="number" id="eSpeed" step="1" min="0" inputmode="decimal"></label>
+        </div>
+        <div class="row4">
+          <label class="field">Cyl. distance mm *<input type="number" id="eCyl" step="0.1" min="0" inputmode="decimal"></label>
+          <label class="field">R1 setting *<input type="number" id="eR1" step="any" inputmode="decimal"></label>
+          <label class="field">R2 setting *<input type="number" id="eR2" step="any" inputmode="decimal"></label>
+        </div>
+        <label class="field">Notes<textarea id="eNotes" rows="2"></textarea></label>
+      </div>
+      <div class="panelhead" style="margin:16px 0 8px"><h3>Shots</h3><div class="toggles"><label><input type="checkbox" id="eNums" checked> Shot numbers</label></div></div>
+      <div class="stage editing"><canvas id="eCv" width="1920" height="1080"></canvas></div>
+      <div class="status" id="eHint" style="margin-top:8px"></div>
+      <div class="kpis" style="margin-top:12px">
+        <div class="kpi"><div class="v" id="eKPerfect">–</div><div class="l">sectors 5 / 5</div></div>
+        <div class="kpi"><div class="v" id="eKHit">–</div><div class="l">hit rate</div></div>
+        <div class="kpi"><div class="v" id="eKMiss">–</div><div class="l">avg miss cm</div></div>
+        <div class="kpi"><div class="v" id="eKSpread">–</div><div class="l">spread cm</div></div>
+      </div>
+      <div class="sgrid" id="eSgrid"></div>
+      <details class="fold" style="margin-top:14px">
+        <summary><h2>Shot list</h2><span class="status">Change targets or mark a shot as no ball.</span></summary>
+        <div class="tablewrap">
+          <table><thead><tr><th class="num">#</th><th>File</th><th>Target</th><th>Sector</th><th class="num">Miss cm</th><th>Check</th><th></th></tr></thead><tbody id="eBody"></tbody></table>
+        </div>
+      </details>
+      <div class="savebar" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+        <div class="gate" id="eGate"></div>
+        <div class="actions">
+          <button type="button" id="eCancel">Cancel</button>
+          <button type="button" class="primary" id="eSave" disabled>Save changes</button>
+        </div>
+      </div>
+    </section>
   </div>
 </div>
 <div class="drop" id="drop" hidden>Drop screenshots</div>

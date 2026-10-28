@@ -68,6 +68,7 @@ function stats(rows){const t=rows.filter(r=>r.target&&r.sector!=null),per={};
   return{balls:rows.filter(r=>r.sector!=null).length,aimed:t.length,hitRate:t.length?100*t.filter(r=>r.hit).length/t.length:null,
     meanMiss:t.length?t.reduce((q,r)=>q+r.miss,0)/t.length:null,spread:spreads.length?spreads.reduce((a,b)=>a+b,0)/spreads.length:null,perSector:ps};}
 const fmt=(v,d=0)=>v==null||isNaN(v)?'–':(+v).toFixed(d);
+const PILL={ok:'<span class="pill ok">ok</span>',manual:'<span class="pill">corrected</span>',excluded:'<span class="pill">excluded</span>',borderline:'<span class="pill warn">borderline</span>',multiple:'<span class="pill warn">2+ balls</span>','no ball':'<span class="pill bad">no ball</span>'};
 
 /* ---------- drawing ---------- */
 function drawGrid(ctx,g,W,H,handles){const gg=geo(g,W,H),cw=g.gw/g.cols,rh=g.gh/g.rows,lw=Math.max(2,W/700);
@@ -129,7 +130,7 @@ function render(){
   const tb=$('tbody');tb.innerHTML='';$('emptyMsg').hidden=cur.shots.length>0;
   const opt=t=>'<option value="">–</option>'+Array.from({length:N},(_,k)=>`<option${t===k+1?' selected':''}>${k+1}</option>`).join('');
   rows.forEach(r=>{const tr=document.createElement('tr');tr.className='row'+(r.i===sel?' sel':'');
-    const pill={ok:'<span class="pill ok">ok</span>',manual:'<span class="pill">corrected</span>',excluded:'<span class="pill">excluded</span>',borderline:'<span class="pill warn">borderline</span>',multiple:'<span class="pill warn">2+ balls</span>','no ball':'<span class="pill bad">no ball</span>'}[r.flag];
+    const pill=PILL[r.flag];
     const hit=r.target&&r.sector?(r.hit?' <span class="pill hit">hit</span>':' <span class="pill bad">miss</span>'):'';
     tr.innerHTML=`<td class="num">${r.shot}</td><td>${esc(r.file)}</td><td><select data-i="${r.i}" aria-label="Target sector">${opt(r.target)}</select></td><td><span class="sec">${r.sector??'–'}</span>${hit}</td>`+
       `<td class="num">${r.sector?Math.round(r.x):''}</td><td class="num">${r.sector?Math.round(r.y):''}</td><td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${pill}</td>`;
@@ -225,17 +226,20 @@ function renderChart(list){const svg=$('chart'),m=$('metric').value,W=900,H=260,
 const imgCache={};
 function loadImg(id){if(!id)return Promise.resolve(null);if(imgCache[id])return imgCache[id];
   return imgCache[id]=new Promise(res=>{const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);api.raw('GET','/api/image?id='+encodeURIComponent(id)).then(r=>r.ok?r.blob():null).then(b=>{if(!b)return res(null);im.src=URL.createObjectURL(b);}).catch(()=>res(null));});}
-async function renderCompare(){const ss=picked.map(id=>sessions.find(s=>s._id===id)).filter(Boolean);$('cmpPanel').hidden=!ss.length;if(!ss.length)return;
+function noImage(x,cv){x.fillStyle='#000';x.fillRect(0,0,cv.width,cv.height);x.fillStyle='#6b7a70';x.font='500 34px sans-serif';x.textAlign='center';x.fillText('No stored image',cv.width/2,cv.height/2);}
+async function renderCompare(){const ss=picked.map(id=>sessions.find(s=>s._id===id)).filter(Boolean);$('cmpPanel').hidden=!ss.length||!!ed;if(!ss.length||ed)return;
   $('cmpTitle').textContent=ss.length===2?'Compare':'Session';const box=$('cmpBox');box.innerHTML='';
   for(const s of ss){const d=document.createElement('div'),cv=document.createElement('canvas');d.appendChild(cv);const sg2=s.grid||G,mg=document.createElement('div');mg.className='sgrid mini';mg.style.setProperty('--cols',sg2.cols);
     mg.innerHTML=cardsHTML(sectorSummary((s.shots||[]).map(q=>({n:q.n,target:q.target,sector:q.sector})),sg2,s.perSector||5),sg2,null,false);d.appendChild(mg);
     const m=document.createElement('p');m.className='meta';m.innerHTML=`<span class="fbtag" style="--fbc:var(--fb${esc(s.fireball)})">FB ${esc(s.fireball)}</span> ${esc(s.date)} · ${esc(s.psi??'–')} PSI · ${esc(s.speed??'–')} km/h · cyl ${esc(s.cyl??'–')} mm · R1 ${esc(s.r1??'–')} · R2 ${esc(s.r2??'–')} · ${esc(s.operator||'')} ${s.notes?'· '+esc(s.notes):''}`;d.appendChild(m);
-    const del=document.createElement('button');del.type='button';del.className='danger';del.textContent='Delete session';del.style.marginTop='8px';
+    const acts=document.createElement('div');acts.className='actions';acts.style.marginTop='8px';
+    const edit=document.createElement('button');edit.type='button';edit.textContent='Edit session';edit.onclick=()=>openEdit(s._id);
+    const del=document.createElement('button');del.type='button';del.className='danger';del.textContent='Delete session';
     del.onclick=async()=>{if(del.dataset.armed!=='1'){del.dataset.armed='1';del.textContent='Click again to delete for everyone';return;}
       try{await db.collection('sessions').doc(s._id).delete();picked=picked.filter(x=>x!==s._id);}catch(e){del.textContent='Delete failed';}};
-    d.appendChild(del);box.appendChild(d);
+    acts.append(edit,del);d.appendChild(acts);box.appendChild(d);
     cv.width=s.W||1920;cv.height=s.H||1080;const x=cv.getContext('2d'),im=await loadImg(s.imageId);
-    if(im)x.drawImage(im,0,0,cv.width,cv.height);else{x.fillStyle='#000';x.fillRect(0,0,cv.width,cv.height);x.fillStyle='#6b7a70';x.font='500 34px sans-serif';x.textAlign='center';x.fillText('No stored image',cv.width/2,cv.height/2);}
+    if(im)x.drawImage(im,0,0,cv.width,cv.height);else noImage(x,cv);
     overlay(x,s.grid,cv.width,cv.height,(s.shots||[]).filter(q=>q.px).map(q=>({n:q.n,x:q.px.x,y:q.px.y})),{grid:true,nums:$('cNums').checked,k:40});}
   // table
   const sectors=[...new Set(ss.flatMap(s=>s.plan||[]))].sort((a,b)=>a-b);
@@ -244,6 +248,46 @@ async function renderCompare(){const ss=picked.map(id=>sessions.find(s=>s._id===
   h+=row('Sectors 5 / 5',s=>`<b>${s.stats?.perfect??'–'}</b> / ${(s.plan||[]).length||10}`)+row('PSI',s=>esc(s.psi??'–'))+row('Speed km/h',s=>esc(s.speed??'–'))+row('Cylinder distance mm',s=>esc(s.cyl??'–'))+row('R1',s=>esc(s.r1??'–'))+row('R2',s=>esc(s.r2??'–'))+row('Hit rate',s=>s.stats?.hitRate==null?'–':Math.round(s.stats.hitRate)+'%')+row('Avg miss cm',s=>fmt(s.stats?.meanMiss))+row('Spread cm',s=>fmt(s.stats?.spread))+row('Balls found',s=>`${s.stats?.balls??'–'}/${s.expected??'–'}`);
   sectors.forEach(sec=>{h+=row(`Sector ${sec}: hits · miss · spread`,s=>{const p=s.stats?.perSector?.[sec];return p?`${p.hits}/${p.n} · ${fmt(p.meanMiss)} · ${fmt(p.spread)}`:'–';});});
   $('cmpTable').innerHTML=h+'</tbody>';}
+
+/* ---------- edit saved session (no screenshots kept: works on stored ball positions + stacked image) ---------- */
+let ed=null;
+const eMeta=[['eDate','date'],['eOp','operator'],['ePsi','psi'],['eSpeed','speed'],['eCyl','cyl'],['eR1','r1'],['eR2','r2'],['eNotes','notes']];
+function openEdit(id){const s=sessions.find(x=>x._id===id);if(!s)return;
+  ed={id,src:s,fireball:s.fireball,shots:(s.shots||[]).map(q=>({...q,px:q.px?{...q.px}:null})),sel:-1,dirty:false,saving:false};
+  eMeta.forEach(([el,k])=>$(el).value=s[k]??'');$('eTitle').textContent=`Edit session · FB ${s.fireball} · ${s.date||''}`;$('eState').textContent='';
+  $('editPanel').hidden=false;$('cmpPanel').hidden=true;renderEdit();$('editPanel').scrollIntoView({behavior:'smooth',block:'start'});}
+function closeEdit(){ed=null;$('editPanel').hidden=true;$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';renderCompare();}
+// untouched shots keep their stored cm values; moved ones are re-measured with the grid the session was saved with
+function editRows(){const s=ed.src,g=s.grid||G,gg=geo(g,s.W||1920,s.H||1080);
+  return ed.shots.map((q,i)=>{const r={i,shot:q.n??i+1,file:q.file||'',target:q.target,flag:q.flag};if(!q.px)return r;
+    let x=q.x,y=q.y,sector=q.sector;if(q.moved||x==null||sector==null){[x,y]=apply(gg.toCm,q.px.x,q.px.y);sector=sectorOf(g,x,y);}
+    Object.assign(r,{x,y,sector,px:q.px});
+    if(q.target){const[tx,ty]=sectorCentre(g,q.target);r.hit=sector===q.target;r.miss=Math.hypot(x-tx,y-ty);}return r;});}
+function editGate(){const miss=[];if(!ed.fireball)miss.push('fireball');if(!(+$('ePsi').value>0))miss.push('PSI');if(!(+$('eSpeed').value>0))miss.push('speed');if($('eCyl').value==='')miss.push('cylinder distance');if($('eR1').value==='')miss.push('R1');if($('eR2').value==='')miss.push('R2');
+  const ok=!miss.length;$('eSave').disabled=!ok||!ed.dirty||ed.saving;$('eGate').textContent=ok?(ed.dirty?'Unsaved changes.':''):`Fill in first: ${miss.join(', ')}.`;
+  document.querySelectorAll('#eFbs .fb').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.fb===ed.fireball)));return ok;}
+function renderEdit(){if(!ed)return;const s=ed.src,g=s.grid||G,rows=editRows(),st=stats(rows),N=nSect(g);
+  const sum=sectorSummary(rows.map(r=>({n:r.shot,i:r.i,target:r.target,sector:r.sector??null})),g,s.perSector||5);
+  $('eKPerfect').textContent=`${sum.perfect}/${sum.aimed}`;$('eKHit').textContent=st.hitRate==null?'–':Math.round(st.hitRate)+'%';$('eKMiss').textContent=fmt(st.meanMiss);$('eKSpread').textContent=fmt(st.spread);
+  const sg=$('eSgrid');sg.style.setProperty('--cols',g.cols);sg.innerHTML=cardsHTML(sum,g,st.perSector,true);
+  const opt=t=>'<option value="">–</option>'+Array.from({length:N},(_,k)=>`<option${t===k+1?' selected':''}>${k+1}</option>`).join('');
+  $('eBody').innerHTML=rows.map(r=>{const hit=r.target&&r.sector?(r.hit?' <span class="pill hit">hit</span>':' <span class="pill bad">miss</span>'):'';
+    return `<tr class="row${r.i===ed.sel?' sel':''}" data-i="${r.i}"><td class="num">${r.shot}</td><td>${esc(r.file)}</td><td><select data-i="${r.i}" aria-label="Target sector">${opt(r.target)}</select></td><td><span class="sec">${r.sector??'–'}</span>${hit}</td>`+
+      `<td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${PILL[r.flag]||''}</td><td>${r.px?`<button type="button" data-nb="${r.i}" style="padding:2px 8px">No ball</button>`:''}</td></tr>`;}).join('');
+  const r=rows[ed.sel];$('eHint').textContent=r?`Shot ${r.shot} · target ${r.target??'–'} · landed ${r.sector??'–'}. Click the image where this ball is to move it.`:'Pick a shot (a dot in the sector cards or a row in the shot list), then click the image where its ball is.';
+  drawEdit(rows);editGate();}
+async function drawEdit(rows){const s=ed.src,cv=$('eCv'),im=await loadImg(s.imageId);if(!ed||ed.src!==s)return;
+  cv.width=s.W||1920;cv.height=s.H||1080;const x=cv.getContext('2d');if(im)x.drawImage(im,0,0,cv.width,cv.height);else noImage(x,cv);
+  overlay(x,s.grid||G,cv.width,cv.height,rows.filter(r=>r.px).map(r=>({n:r.shot,x:r.px.x,y:r.px.y,hl:r.i===ed.sel})),{grid:true,nums:$('eNums').checked,k:40});
+  const p=rows[ed.sel]?.px;if(p){x.strokeStyle='#ffc400';x.lineWidth=4;x.beginPath();x.arc(p.x,p.y,cv.width/60,0,7);x.stroke();}}
+async function saveEdit(){if(!ed||!db||!editGate())return;ed.saving=true;editGate();$('eState').textContent='Saving…';
+  const s=ed.src,g=s.grid||G,rows=editRows(),st=stats(rows),{_id,...base}=s;
+  const doc={...base,fireball:ed.fireball,psi:+$('ePsi').value,speed:+$('eSpeed').value,cyl:+$('eCyl').value,r1:+$('eR1').value,r2:+$('eR2').value,date:$('eDate').value,operator:$('eOp').value.trim(),notes:$('eNotes').value.trim(),updatedAt:new Date().toISOString(),
+    stats:{perfect:sectorSummary(rows.map(r=>({n:r.shot,target:r.target,sector:r.sector??null})),g,s.perSector||5).perfect,balls:st.balls,aimed:st.aimed,hitRate:st.hitRate,meanMiss:st.meanMiss,spread:st.spread,perSector:st.perSector},
+    shots:rows.map(r=>({n:r.shot,file:r.file,target:r.target??null,sector:r.sector??null,x:r.x!=null?+r.x.toFixed(1):null,y:r.y!=null?+r.y.toFixed(1):null,
+      miss:r.miss!=null?+r.miss.toFixed(1):null,px:r.px?{x:Math.round(r.px.x),y:Math.round(r.px.y)}:null,flag:r.flag}))};
+  try{await db.collection('sessions').doc(ed.id).set(doc);closeEdit();}
+  catch(e){ed.saving=false;editGate();$('eState').innerHTML=`<span style="color:var(--bad)">Not saved: ${esc(e&&e.message||'storage error')}. Try again.</span>`;}}
 
 /* ---------- export ---------- */
 let dl=null;
@@ -258,7 +302,7 @@ $('imgBtn').onclick=()=>{if(!cur.base)return;const cv=composeClean();const pts=c
   overlay(cv.getContext('2d'),G,cv.width,cv.height,pts,{grid:$('tGrid').checked,nums:$('tNums').checked});cv.toBlob(b=>saveFile(fname('jpg'),b),'image/jpeg',.9);};
 
 /* ---------- events ---------- */
-document.querySelectorAll('.fb').forEach(b=>b.onclick=()=>{cur.fireball=+b.dataset.fb;document.querySelectorAll('.fb').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));cur.dirty=true;render();});
+document.querySelectorAll('#fbs .fb').forEach(b=>b.onclick=()=>{cur.fireball=+b.dataset.fb;document.querySelectorAll('#fbs .fb').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));cur.dirty=true;render();});
 ['sDate','sOp','sNotes','sPsi','sSpeed','sCyl','sR1','sR2'].forEach(id=>$(id).addEventListener('input',()=>{cur.dirty=true;render();}));
 $('addBtn').onclick=()=>$('fileIn').click();
 $('fileIn').onchange=e=>{if(e.target.files.length)loadFiles(e.target.files);e.target.value='';};
@@ -272,7 +316,7 @@ $('saveBtn').onclick=saveSession;
 $('sgrid').addEventListener('click',e=>{const b=e.target.closest('button.dot');if(!b)return;openInspector(+b.dataset.i);$('inspector').scrollIntoView({behavior:'smooth',block:'start'});});
 $('newBtn').onclick=()=>{if($('newBtn').dataset.armed!=='1'&&cur.shots.length&&cur.dirty){$('newBtn').dataset.armed='1';$('newBtn').textContent='Discard unsaved session?';setTimeout(()=>{$('newBtn').dataset.armed='';$('newBtn').textContent='New session';},4000);return;}
   $('newBtn').dataset.armed='';$('newBtn').textContent='New session';Object.assign(cur,{fireball:null,plan:PLAN.slice(),shots:[],base:null,savedId:null,savedImg:null,dirty:false});sel=-1;$('inspector').hidden=true;
-  document.querySelectorAll('.fb').forEach(x=>x.setAttribute('aria-pressed','false'));$('sNotes').value='';$('sDate').value=new Date().toISOString().slice(0,10);renderPlan();render();scrollTo({top:0});};
+  document.querySelectorAll('#fbs .fb').forEach(x=>x.setAttribute('aria-pressed','false'));$('sNotes').value='';$('sDate').value=new Date().toISOString().slice(0,10);renderPlan();render();scrollTo({top:0});};
 $('inspCv').addEventListener('click',async e=>{const sh=cur.shots[sel];if(!sh)return;const[x,y]=cvPt(e.target,e);const rs=cur.shots.filter(s=>s.pos).map(s=>s.pos.r).sort((a,b)=>a-b),r=rs.length?rs[rs.length>>1]:sh.W/85;
   const near=sh.auto.find(c=>Math.hypot(c.x-x,c.y-y)<c.r*1.5);sh.pos=near?{...near}:{x,y,r};sh.manual=true;const bmp=await createImageBitmap(sh.file);sh.crop=makeCrop(bmp,sh.pos);bmp.close&&bmp.close();cur.dirty=true;render();drawInspector();});
 $('noBallBtn').onclick=()=>{const sh=cur.shots[sel];if(!sh)return;sh.pos=null;sh.crop=null;sh.manual=true;cur.dirty=true;render();drawInspector();};
@@ -285,6 +329,18 @@ $('tabS').onclick=()=>{location.hash='';showTab('');};$('tabH').onclick=()=>{loc
 addEventListener('hashchange',()=>showTab(location.hash.slice(1)));
 document.querySelectorAll('#fbFilter button').forEach(b=>b.onclick=()=>{filt=b.dataset.f;document.querySelectorAll('#fbFilter button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderHistory();});
 $('metric').onchange=()=>renderChart(shownSessions());$('cNums').onchange=renderCompare;
+document.querySelectorAll('#eFbs .fb').forEach(b=>b.onclick=()=>{if(!ed)return;ed.fireball=+b.dataset.fb;ed.dirty=true;editGate();});
+eMeta.forEach(([id])=>$(id).addEventListener('input',()=>{if(!ed)return;ed.dirty=true;editGate();}));
+$('eNums').onchange=renderEdit;
+$('eSgrid').addEventListener('click',e=>{const b=e.target.closest('button.dot');if(!b||!ed)return;ed.sel=+b.dataset.i;renderEdit();$('eCv').scrollIntoView({behavior:'smooth',block:'nearest'});});
+$('eBody').addEventListener('click',e=>{if(!ed)return;const nb=e.target.closest('button[data-nb]');
+  if(nb){Object.assign(ed.shots[+nb.dataset.nb],{px:null,x:null,y:null,sector:null,miss:null,moved:false,flag:'excluded'});ed.dirty=true;renderEdit();return;}
+  const tr=e.target.closest('tr[data-i]');if(tr&&e.target.tagName!=='SELECT'){ed.sel=+tr.dataset.i;renderEdit();}});
+$('eBody').addEventListener('change',e=>{if(!ed||e.target.tagName!=='SELECT')return;ed.shots[+e.target.dataset.i].target=e.target.value?+e.target.value:null;ed.dirty=true;renderEdit();});
+$('eCv').addEventListener('click',e=>{if(!ed)return;if(ed.sel<0){$('eHint').textContent='Pick a shot first: a dot in the sector cards or a row in the shot list.';return;}
+  const[x,y]=cvPt(e.target,e);Object.assign(ed.shots[ed.sel],{px:{x:Math.round(x),y:Math.round(y)},moved:true,flag:'manual'});ed.dirty=true;renderEdit();});
+$('eCancel').onclick=()=>{if(ed&&ed.dirty&&$('eCancel').dataset.armed!=='1'){$('eCancel').dataset.armed='1';$('eCancel').textContent='Discard changes?';setTimeout(()=>{$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';},4000);return;}closeEdit();};
+$('eSave').onclick=saveEdit;
 
 /* ---------- start ---------- */
 $('sDate').value=new Date().toISOString().slice(0,10);
