@@ -55,12 +55,14 @@ function makeCrop(bmp,p){const R=Math.ceil(p.r+3),c=document.createElement('canv
 /* ---------- duplicates: the camera timestamp (top-right picture-in-picture) differs on every shot ---------- */
 const FP_BOX=[.765,.02,.885,.075],FP_MIN=150;
 function fingerprint(bmp,auto){const W=bmp.width,H=bmp.height,x0=Math.round(FP_BOX[0]*W),y0=Math.round(FP_BOX[1]*H),w=Math.round(FP_BOX[2]*W)-x0,h=Math.round(FP_BOX[3]*H)-y0;
-  work.width=w;work.height=h;wctx.drawImage(bmp,x0,y0,w,h,0,0,w,h);const d=wctx.getImageData(0,0,w,h).data,bits=new Uint8Array(w*h);let n=0;
-  for(let i=0;i<w*h;i++)if(.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2]>180){bits[i]=1;n++;}
-  return{bits,n,ax:auto[0]?.x??null,ay:auto[0]?.y??null};}
-// same timestamp (re-encoded copies differ ~2%, different shots ≥10%); without a readable timestamp: the exact same detected ball
+  work.width=w;work.height=h;wctx.drawImage(bmp,x0,y0,w,h,0,0,w,h);const d=wctx.getImageData(0,0,w,h).data,g=new Uint8Array(w*h);let n=0;
+  for(let i=0;i<w*h;i++){g[i]=.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2];if(g[i]>180)n++;}
+  return{g,n,ax:auto[0]?.x??null,ay:auto[0]?.y??null};}
+// same timestamp = no pixel flips between text-white and background-black. One changed digit (4:23:09 / 4:28:09) flips
+// 17+ pixels, a re-saved copy (JPEG q30, rescaled) 0, so ≤5 counts as the same screenshot.
+// Without a readable timestamp: the exact same detected ball.
 function fpSame(a,b){if(!a||!b)return false;
-  if(a.n>=FP_MIN&&b.n>=FP_MIN&&a.bits.length===b.bits.length){let d=0;for(let k=0;k<a.bits.length;k++)if(a.bits[k]!==b.bits[k])d++;return d/Math.max(a.n,b.n)<.05;}
+  if(a.n>=FP_MIN&&b.n>=FP_MIN&&a.g.length===b.g.length){let d=0;for(let k=0;k<a.g.length;k++)if(Math.abs(a.g[k]-b.g[k])>150)d++;return d<=5;}
   return a.ax!=null&&a.ax===b.ax&&a.ay===b.ay;}
 // dup[i] = index of the first earlier shot that is the same screenshot
 function dupsOf(list,same){const out=[];list.forEach((q,i)=>{for(let j=0;j<i;j++)if(same(list[j],q)){out[i]=j;break;}});return out;}
