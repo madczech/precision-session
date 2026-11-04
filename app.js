@@ -261,6 +261,12 @@ const imgCache={};
 function loadImg(id){if(!id)return Promise.resolve(null);if(imgCache[id])return imgCache[id];
   return imgCache[id]=new Promise(res=>{const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);api.raw('GET','/api/image?id='+encodeURIComponent(id)).then(r=>r.ok?r.blob():null).then(b=>{if(!b)return res(null);im.src=URL.createObjectURL(b);}).catch(()=>res(null));});}
 function noImage(x,cv){x.fillStyle='#000';x.fillRect(0,0,cv.width,cv.height);x.fillStyle='#6b7a70';x.font='500 34px sans-serif';x.textAlign='center';x.fillText('No stored image',cv.width/2,cv.height/2);}
+// two clicks: the first one names the session that goes; resets after 4 s
+function armDelete(btn,s,label){if(btn.dataset.armed==='1')return true;btn.dataset.armed='1';
+  btn.textContent=`Delete FB ${s.fireball} · ${s.date||String(s.createdAt||'').slice(0,10)} · ${(s.shots||[]).length} shots for everyone? Click again`;
+  clearTimeout(btn._t);btn._t=setTimeout(()=>{btn.dataset.armed='';btn.textContent=label;},4000);return false;}
+// removes the session and its stored image
+async function deleteSession(s){await db.collection('sessions').doc(s._id).delete();picked=picked.filter(x=>x!==s._id);}
 async function renderCompare(){const ss=picked.map(id=>sessions.find(s=>s._id===id)).filter(Boolean);$('cmpPanel').hidden=!ss.length||!!ed;if(!ss.length||ed)return;
   $('cmpTitle').textContent=ss.length===2?'Compare':'Session';const box=$('cmpBox');box.innerHTML='';
   for(const s of ss){const d=document.createElement('div'),cv=document.createElement('canvas');d.appendChild(cv);const sg2=s.grid||G,mg=document.createElement('div');mg.className='sgrid mini';mg.style.setProperty('--cols',sg2.cols);
@@ -269,12 +275,12 @@ async function renderCompare(){const ss=picked.map(id=>sessions.find(s=>s._id===
     const acts=document.createElement('div');acts.className='actions';acts.style.marginTop='8px';
     const edit=document.createElement('button');edit.type='button';edit.textContent='Edit session';edit.onclick=()=>openEdit(s._id);
     const del=document.createElement('button');del.type='button';del.className='danger';del.textContent='Delete session';
-    del.onclick=async()=>{if(del.dataset.armed!=='1'){del.dataset.armed='1';del.textContent='Click again to delete for everyone';setTimeout(()=>{del.dataset.armed='';del.textContent='Delete session';},4000);return;}
-      try{await db.collection('sessions').doc(s._id).delete();picked=picked.filter(x=>x!==s._id);}catch(e){del.textContent='Delete failed';}};
+    del.onclick=async()=>{if(!armDelete(del,s,'Delete session'))return;
+      try{await deleteSession(s);}catch(e){del.textContent='Delete failed';}};
     acts.append(edit,del);d.appendChild(acts);box.appendChild(d);
     cv.width=s.W||1920;cv.height=s.H||1080;const x=cv.getContext('2d'),im=await loadImg(s.imageId);
     if(im)x.drawImage(im,0,0,cv.width,cv.height);else noImage(x,cv);
-    overlay(x,s.grid,cv.width,cv.height,(s.shots||[]).filter(q=>q.px).map(q=>({n:q.n,x:q.px.x,y:q.px.y})),{grid:true,nums:$('cNums').checked,k:40});}
+    overlay(x,sg2,cv.width,cv.height,(s.shots||[]).filter(q=>q.px).map(q=>({n:q.n,x:q.px.x,y:q.px.y})),{grid:true,nums:$('cNums').checked,k:40});}
   // table
   const sectors=[...new Set(ss.flatMap(s=>s.plan||[]))].sort((a,b)=>a-b);
   let h=`<thead><tr><th></th>${ss.map(s=>`<th class="num"><span class="fbtag" style="--fbc:var(--fb${esc(s.fireball)})">FB ${esc(s.fireball)}</span> ${esc(s.date)}</th>`).join('')}</tr></thead><tbody>`;
@@ -292,7 +298,8 @@ function openEdit(id){const s=sessions.find(x=>x._id===id);if(!s)return;
   ed={id,src:s,fireball:s.fireball,shots:(s.shots||[]).map(q=>({...q,px:q.px?{...q.px}:null})),sel:-1,dirty:false,saving:false,grid:gridCopy(s.grid||G),gridChanged:false};$('eGridEdit').checked=false;
   eMeta.forEach(([el,k])=>$(el).value=s[k]??'');$('eTitle').textContent=`Edit session · FB ${s.fireball} · ${s.date||''}`;$('eState').textContent='';$('eDelState').textContent='';$('eLoad').textContent=E_LOAD_TIP;
   $('editPanel').hidden=false;$('cmpPanel').hidden=true;renderEdit();$('editPanel').scrollIntoView({behavior:'smooth',block:'start'});}
-function closeEdit(){ed=null;$('editPanel').hidden=true;$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';renderCompare();}
+function closeEdit(){ed=null;$('editPanel').hidden=true;$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';
+  const d=$('eDelete');clearTimeout(d._t);d.dataset.armed='';d.textContent='Delete session';renderCompare();}
 const gridCopy=g=>JSON.parse(JSON.stringify({cols:g.cols,rows:g.rows,order:g.order,gw:g.gw,gh:g.gh,corners:g.corners,air:g.air,th:g.th}));
 // untouched shots keep their stored cm values; moved ones (or all, once the grid changed) are re-measured with the session's grid
 // with the screenshots loaded duplicates are checked on their timestamps, otherwise only identical stored ball positions are flagged
@@ -305,7 +312,7 @@ function editRows(){const s=ed.src,g=ed.grid,gg=geo(g,s.W||1920,s.H||1080),{sure
     Object.assign(r,{x,y,sector,px:q.px});
     if(q.target){const[tx,ty]=sectorCentre(g,q.target);r.hit=sector===q.target;r.miss=Math.hypot(x-tx,y-ty);}return r;});}
 function editGate(){const miss=[];if(!ed.fireball)miss.push('fireball');if(!(+$('ePsi').value>0))miss.push('PSI');if(!(+$('eSpeed').value>0))miss.push('speed');if($('eCyl').value==='')miss.push('cylinder distance');if($('eR1').value==='')miss.push('R1');if($('eR2').value==='')miss.push('R2');
-  const ok=!miss.length;$('eSave').disabled=!ok||!ed.dirty||ed.saving||ed.loading;$('eLoadBtn').disabled=!!ed.loading;$('eGate').textContent=ok?(ed.dirty?'Unsaved changes.':''):`Fill in first: ${miss.join(', ')}.`;
+  const ok=!miss.length;$('eSave').disabled=!ok||!ed.dirty||ed.saving||ed.loading;$('eDelete').disabled=!!(ed.saving||ed.loading);$('eLoadBtn').disabled=!!ed.loading;$('eGate').textContent=ok?(ed.dirty?'Unsaved changes.':''):`Fill in first: ${miss.join(', ')}.`;
   document.querySelectorAll('#eFbs .fb').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.fb===ed.fireball)));return ok;}
 function renderEdit(){if(!ed)return;const s=ed.src,g=ed.grid,rows=editRows(),st=stats(rows),N=nSect(g);
   const sum=sectorSummary(rows.map(r=>({n:r.shot,i:r.i,target:r.target,sector:r.sector??null})),g,s.perSector||5);
@@ -429,6 +436,10 @@ $('eCv').addEventListener('click',e=>{if(!ed||$('eGridEdit').checked)return;if(e
   const[x,y]=cvPt(e.target,e);setEditPos(ed.sel,{x,y},'manual');});
 $('eCancel').onclick=()=>{if(ed&&ed.dirty&&$('eCancel').dataset.armed!=='1'){$('eCancel').dataset.armed='1';$('eCancel').textContent='Discard changes?';setTimeout(()=>{$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';},4000);return;}closeEdit();};
 $('eSave').onclick=saveEdit;
+$('eDelete').onclick=async()=>{const E=ed;if(!E||E.saving||E.loading||!armDelete($('eDelete'),E.src,'Delete session'))return;
+  E.saving=true;editGate();$('eState').textContent='Deleting…';
+  try{await deleteSession(E.src);if(ed===E)closeEdit();}
+  catch(e){if(ed!==E)return;E.saving=false;editGate();$('eDelete').dataset.armed='';$('eDelete').textContent='Delete session';$('eState').innerHTML=`<span style="color:var(--bad)">Not deleted: ${esc(e&&e.message||'storage error')}. Try again.</span>`;}};
 $('eGridEdit').onchange=renderEdit;
 const setEditGrid=g=>{if(!ed)return;ed.grid=gridCopy(g);ed.gridChanged=true;ed.dirty=true;renderEdit();};
 $('eGridShared').onclick=()=>setEditGrid(G);
