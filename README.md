@@ -8,11 +8,15 @@ Penalty Arena launcher accuracy log. Live at https://precision-session.vercel.ap
 - Loads the 50 screenshots, detects the ball in the air in each (in the browser), assigns the sector,
   builds a stacked session image and per-sector results (5/5, hit rate, avg miss, spread).
 - Saves sessions to shared History: trend by fireball, side-by-side compare, CSV/image export.
+- Shots uploaded twice are flagged: every screenshot carries the camera timestamp in the top-right picture-in-picture,
+  and two shots with the same timestamp are the same shot. Any shot can be deleted (shot list or the shot view) in the
+  Session tab and in the History editor; later shots move up and their targets follow the plan. Undo until saved.
 - Saved sessions can be edited from History: setup values, notes, shot targets, ball positions (click the stored image)
   and "no ball". Stats are recalculated with the grid the session was saved with; that grid can also be adjusted
   (drag its corners or take the shared grid), which re-measures every shot. Screenshots are not stored; loading the
   original screenshots into the editor again gives the full per-shot check (Auto / No ball / click the ball) and the
   session image is rebuilt on save.
+- Saving is refused (and says so) if someone else saved the same session in between.
 
 ## Structure
 - `index.html`, `style.css`, `app.js` — the whole front end (no build step).

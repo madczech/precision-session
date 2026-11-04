@@ -30,6 +30,12 @@ export default async function handler(req, res) {
     if (req.method === 'PUT') {
       const doc = req.body;
       if (!doc || typeof doc !== 'object' || ![2, 4, 5].includes(doc.fireball)) return res.status(400).json({ error: 'Session needs a fireball (2, 4 or 5)' });
+      // x-base-version: the updatedAt (or createdAt) the edit started from; refuse if someone saved in between
+      const base = req.headers['x-base-version'];
+      if (base) {
+        const now = await readJson(`sessions/${id}.json`).catch(() => null);
+        if (now && (now.updatedAt || now.createdAt) !== base) return res.status(409).json({ error: 'Session was changed by someone else' });
+      }
       await put(`sessions/${id}.json`, JSON.stringify(doc), { access: 'private', contentType: 'application/json', allowOverwrite: true, addRandomSuffix: false });
       return res.status(200).json({ ok: true, id });
     }

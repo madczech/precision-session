@@ -52,10 +52,23 @@ function makeCrop(bmp,p){const R=Math.ceil(p.r+3),c=document.createElement('canv
   x.drawImage(bmp,p.x-R,p.y-R,2*R,2*R,0,0,2*R,2*R);x.globalCompositeOperation='destination-in';const gd=x.createRadialGradient(R,R,p.r-1,R,R,p.r+2);
   gd.addColorStop(0,'rgba(0,0,0,1)');gd.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=gd;x.fillRect(0,0,2*R,2*R);return c;}
 
+/* ---------- duplicates: the camera timestamp (top-right picture-in-picture) differs on every shot ---------- */
+const FP_BOX=[.765,.02,.885,.075],FP_MIN=150;
+function fingerprint(bmp,auto){const W=bmp.width,H=bmp.height,x0=Math.round(FP_BOX[0]*W),y0=Math.round(FP_BOX[1]*H),w=Math.round(FP_BOX[2]*W)-x0,h=Math.round(FP_BOX[3]*H)-y0;
+  work.width=w;work.height=h;wctx.drawImage(bmp,x0,y0,w,h,0,0,w,h);const d=wctx.getImageData(0,0,w,h).data,bits=new Uint8Array(w*h);let n=0;
+  for(let i=0;i<w*h;i++)if(.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2]>180){bits[i]=1;n++;}
+  return{bits,n,ax:auto[0]?.x??null,ay:auto[0]?.y??null};}
+// same timestamp (re-encoded copies differ ~2%, different shots ≥10%); without a readable timestamp: the exact same detected ball
+function fpSame(a,b){if(!a||!b)return false;
+  if(a.n>=FP_MIN&&b.n>=FP_MIN&&a.bits.length===b.bits.length){let d=0;for(let k=0;k<a.bits.length;k++)if(a.bits[k]!==b.bits[k])d++;return d/Math.max(a.n,b.n)<.05;}
+  return a.ax!=null&&a.ax===b.ax&&a.ay===b.ay;}
+// dup[i] = index of the first earlier shot that is the same screenshot
+function dupsOf(list,same){const out=[];list.forEach((q,i)=>{for(let j=0;j<i;j++)if(same(list[j],q)){out[i]=j;break;}});return out;}
+
 /* ---------- session data ---------- */
 const expected=()=>cur.plan.length*cur.per;
 const planTarget=i=>cur.plan[Math.floor(i/cur.per)]??null;
-function shotRows(){return cur.shots.map((sh,i)=>{const r={i,shot:i+1,file:sh.name,target:sh.target};
+function shotRows(){const dup=dupsOf(cur.shots,(a,b)=>fpSame(a.fp,b.fp));return cur.shots.map((sh,i)=>{const r={i,shot:i+1,file:sh.name,target:sh.target,dup:dup[i]};
   if(!sh.pos){r.flag=sh.manual?'excluded':'no ball';return r;}
   const g=geo(G,sh.W,sh.H),[x,y]=apply(g.toCm,sh.pos.x,sh.pos.y);Object.assign(r,{x,y,sector:sectorOf(G,x,y),line:lineDist(G,x,y),px:sh.pos});
   r.flag=sh.manual?'manual':(sh.auto.length>1?'multiple':(r.line<G.bd?'borderline':'ok'));
@@ -69,6 +82,9 @@ function stats(rows){const t=rows.filter(r=>r.target&&r.sector!=null),per={};
     meanMiss:t.length?t.reduce((q,r)=>q+r.miss,0)/t.length:null,spread:spreads.length?spreads.reduce((a,b)=>a+b,0)/spreads.length:null,perSector:ps};}
 const fmt=(v,d=0)=>v==null||isNaN(v)?'–':(+v).toFixed(d);
 const PILL={ok:'<span class="pill ok">ok</span>',manual:'<span class="pill">corrected</span>',excluded:'<span class="pill">excluded</span>',borderline:'<span class="pill warn">borderline</span>',multiple:'<span class="pill warn">2+ balls</span>','no ball':'<span class="pill bad">no ball</span>'};
+// sure = same screenshot (timestamp checked); otherwise only the stored ball positions are identical
+const dupPill=(j,sure)=>j==null?'':` <span class="pill ${sure?'bad':'warn'}">${sure?'duplicate of':'same as'} #${j+1}${sure?'':'?'}</span>`;
+const delBtn=(i,n)=>`<button type="button" class="danger" data-del="${i}" title="Delete this shot (uploaded twice or not part of the session)" aria-label="Delete shot ${n}" style="padding:2px 8px">Delete</button>`;
 
 /* ---------- drawing ---------- */
 function drawGrid(ctx,g,W,H,handles){const gg=geo(g,W,H),cw=g.gw/g.cols,rh=g.gh/g.rows,lw=Math.max(2,W/700);
@@ -120,7 +136,8 @@ function perfectOf(s){const g=s.grid||G;return sectorSummary((s.shots||[]).map(q
 function render(){
   drawStage();const rows=shotRows(),st=stats(rows),exp=expected();
   $('counter').innerHTML=`${cur.shots.length} <small>/ ${exp||'–'} shots</small>`;$('counter').classList.toggle('off',cur.shots.length>0&&cur.shots.length!==exp);
-  if(!busy)$('status').innerHTML=cur.shots.length?`<b>${st.balls}</b> balls in the air`+(rows.some(r=>r.flag==='no ball')?` · <b>${rows.filter(r=>r.flag==='no ball').length}</b> without ball`:''):'';
+  const nDup=rows.filter(r=>r.dup!=null).length;
+  if(!busy)$('status').innerHTML=cur.shots.length?`<b>${st.balls}</b> balls in the air`+(rows.some(r=>r.flag==='no ball')?` · <b>${rows.filter(r=>r.flag==='no ball').length}</b> without ball`:'')+(nDup?` · <span style="color:var(--bad)"><b>${nDup}</b> uploaded twice: delete ${nDup>1?'them':'it'} in the shot list</span>`:''):'';
   $('kHit').textContent=st.hitRate==null?'–':Math.round(st.hitRate)+'%';$('kMiss').textContent=fmt(st.meanMiss);$('kSpread').textContent=fmt(st.spread);
   const N=nSect(G),items=rows.map(r=>({n:r.shot,i:r.i,target:r.target,sector:r.sector??null})),sum=sectorSummary(items,G,cur.per);
   const sg=$('sgrid');sg.style.setProperty('--cols',G.cols);sg.innerHTML=cardsHTML(sum,G,st.perSector,true);
@@ -133,8 +150,8 @@ function render(){
     const pill=PILL[r.flag];
     const hit=r.target&&r.sector?(r.hit?' <span class="pill hit">hit</span>':' <span class="pill bad">miss</span>'):'';
     tr.innerHTML=`<td class="num">${r.shot}</td><td>${esc(r.file)}</td><td><select data-i="${r.i}" aria-label="Target sector">${opt(r.target)}</select></td><td><span class="sec">${r.sector??'–'}</span>${hit}</td>`+
-      `<td class="num">${r.sector?Math.round(r.x):''}</td><td class="num">${r.sector?Math.round(r.y):''}</td><td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${pill}</td>`;
-    tr.onclick=e=>{if(e.target.tagName!=='SELECT')openInspector(r.i)};tb.appendChild(tr);});
+      `<td class="num">${r.sector?Math.round(r.x):''}</td><td class="num">${r.sector?Math.round(r.y):''}</td><td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${pill}${dupPill(r.dup,true)}</td><td>${delBtn(r.i,r.shot)}</td>`;
+    tr.onclick=e=>{if(e.target.tagName==='SELECT')return;if(e.target.closest('button[data-del]')){deleteShot(r.i);return;}openInspector(r.i)};tb.appendChild(tr);});
   tb.querySelectorAll('select').forEach(s=>s.onchange=e=>{const sh=cur.shots[+e.target.dataset.i];sh.target=e.target.value?+e.target.value:null;sh.targetManual=true;cur.dirty=true;render();});
   // save state
   const canSave=cur.shots.length>0&&cur.fireball&&+$('sPsi').value>0&&+$('sSpeed').value>0&&$('sCyl').value!==''&&$('sR1').value!==''&&$('sR2').value!==''&&db&&!busy;$('saveBtn').disabled=!canSave||(cur.savedId&&!cur.dirty);
@@ -145,36 +162,53 @@ function render(){
   $('setupState').textContent=cur.fireball?`FB ${cur.fireball} · ${$('sPsi').value||'?'} PSI · ${$('sSpeed').value||'?'} km/h · cyl ${$('sCyl').value||'?'} · R1 ${$('sR1').value||'?'} · R2 ${$('sR2').value||'?'} · ${exp} shots`:'';
   gate();}
 function openInspector(i){sel=i;$('inspector').hidden=false;render();drawInspector();}
+// the stacked image is drawn on the first screenshot, so it is rebuilt when that shot goes
+async function setBase(file){if(!file){cur.base=null;return;}const bmp=await createImageBitmap(file),c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);bmp.close&&bmp.close();cur.base={canvas:c,W:c.width,H:c.height};}
+let undoS=null;
+// later shots move up one place; targets that still follow the plan move with the plan, hand-set ones stay
+async function deleteShot(i){if(busy||!cur.shots[i])return;const gone=cur.shots[i];
+  undoS={shots:cur.shots.slice(),targets:cur.shots.map(sh=>sh.target),base:cur.base,sel,name:gone.name,n:i+1};
+  cur.shots.splice(i,1);cur.shots.forEach((sh,k)=>{if(!sh.targetManual)sh.target=planTarget(k);});
+  if(i===0)await setBase(cur.shots[0]?.file);
+  if(sel===i){sel=-1;$('inspector').hidden=true;}else if(sel>i)sel--;
+  cur.dirty=true;render();if(sel>=0)drawInspector();
+  $('delState').innerHTML=`Shot ${undoS.n} (${esc(undoS.name)}) deleted. <button type="button" id="undoDel" style="padding:2px 8px">Undo</button>`;$('undoDel').onclick=undoDelete;}
+function undoDelete(){if(!undoS||busy)return;cur.shots=undoS.shots;cur.shots.forEach((sh,k)=>sh.target=undoS.targets[k]);cur.base=undoS.base;sel=undoS.sel;
+  $('inspector').hidden=sel<0;undoS=null;$('delState').textContent='';cur.dirty=true;render();if(sel>=0)drawInspector();}
 
 /* ---------- loading ---------- */
 async function loadFiles(list){if(busy||!gate())return;busy=true;sel=-1;$('inspector').hidden=true;
   const files=[...list].filter(f=>/^image\//.test(f.type)||/\.(png|jpe?g|webp)$/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
-  cur.shots=files.map((f,i)=>({file:f,name:f.name,target:planTarget(i),auto:[],pos:null,manual:false,crop:null}));cur.base=null;cur.savedId=null;cur.savedImg=null;cur.dirty=true;
+  cur.shots=files.map((f,i)=>({file:f,name:f.name,target:planTarget(i),auto:[],pos:null,manual:false,crop:null}));cur.base=null;cur.savedId=null;cur.savedImg=null;cur.savedVer=null;cur.savedCreated=null;cur.dirty=true;
+  undoS=null;$('delState').textContent='';
   renderPlan();await analyseAll();}
 async function analyseAll(){busy=true;$('rerunBtn').disabled=true;
   for(let i=0;i<cur.shots.length;i++){$('status').innerHTML=`Analysing <b>${i+1}</b> / ${cur.shots.length}…`;const sh=cur.shots[i],bmp=await createImageBitmap(sh.file);sh.W=bmp.width;sh.H=bmp.height;
     if(i===0){const c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);cur.base={canvas:c,W:bmp.width,H:bmp.height};}
-    sh.auto=detect(bmp);if(!sh.manual)sh.pos=sh.auto[0]||null;sh.crop=sh.pos?makeCrop(bmp,sh.pos):null;bmp.close&&bmp.close();
+    sh.auto=detect(bmp);sh.fp=fingerprint(bmp,sh.auto);if(!sh.manual)sh.pos=sh.auto[0]||null;sh.crop=sh.pos?makeCrop(bmp,sh.pos):null;bmp.close&&bmp.close();
     if(i%5===4||i===cur.shots.length-1){render();await new Promise(r=>setTimeout(r,0));}}
   busy=false;$('rerunBtn').disabled=G.locked;cur.dirty=true;render();}
 
 /* ---------- save session ---------- */
 const canvasBlob=(cv,q=.85)=>new Promise(r=>cv.toBlob(r,'image/jpeg',q));
 async function saveSession(){if(!db||!cur.shots.length)return;busy=true;$('saveBtn').disabled=true;$('saveState').textContent='Saving…';
+  let imageId=null;const oldImg=cur.savedImg;
   try{const rows=shotRows(),st=stats(rows),id=cur.savedId||`${$('sDate').value||new Date().toISOString().slice(0,10)}_FB${cur.fireball}_${Math.random().toString(36).slice(2,7)}`;
-    let imageId=null,oldImg=cur.savedImg;
     if(assets){try{const up=await assets.upload(await canvasBlob(composeClean()),{type:'image/jpeg'});imageId=up.id;}catch(e){console.warn(e);}}
+    const now=new Date().toISOString();
     const doc={fireball:cur.fireball,psi:+$('sPsi').value,speed:+$('sSpeed').value,cyl:+$('sCyl').value,r1:+$('sR1').value,r2:+$('sR2').value,date:$('sDate').value,operator:$('sOp').value.trim(),notes:$('sNotes').value.trim(),plan:cur.plan.slice(),perSector:cur.per,
-      expected:expected(),createdAt:new Date().toISOString(),imageId,W:cur.base.W,H:cur.base.H,
+      // a failed re-upload keeps the last stored image instead of none
+      expected:expected(),createdAt:cur.savedCreated||now,...(cur.savedId?{updatedAt:now}:{}),imageId:imageId||oldImg||null,W:cur.base.W,H:cur.base.H,
       grid:{cols:G.cols,rows:G.rows,order:G.order,gw:G.gw,gh:G.gh,corners:G.corners,air:G.air,th:G.th},
       stats:{perfect:sectorSummary(rows.map(r=>({n:r.shot,target:r.target,sector:r.sector??null})),G,cur.per).perfect,balls:st.balls,aimed:st.aimed,hitRate:st.hitRate,meanMiss:st.meanMiss,spread:st.spread,perSector:st.perSector},
       shots:rows.map(r=>({n:r.shot,file:r.file,target:r.target??null,sector:r.sector??null,x:r.x!=null?+r.x.toFixed(1):null,y:r.y!=null?+r.y.toFixed(1):null,
         miss:r.miss!=null?+r.miss.toFixed(1):null,px:r.px?{x:Math.round(r.px.x),y:Math.round(r.px.y)}:null,flag:r.flag}))};
-    await db.collection('sessions').doc(id).set(doc);
+    await db.collection('sessions').doc(id).set(doc,{base:cur.savedId?cur.savedVer:null});
     if(oldImg&&imageId&&assets){try{await assets.delete(oldImg)}catch(e){}}
-    cur.savedId=id;cur.savedImg=imageId;cur.dirty=false;busy=false;render();
-    if(!imageId)$('saveState').innerHTML='<b>Saved</b>, but the session image could not be stored.';
-  }catch(e){busy=false;render();$('saveState').innerHTML=`<span style="color:var(--bad)">Not saved: ${esc(e&&e.message||'storage error')}. Try again.</span>`;}}
+    cur.savedId=id;cur.savedImg=doc.imageId;cur.savedVer=doc.updatedAt||doc.createdAt;cur.savedCreated=doc.createdAt;cur.dirty=false;busy=false;render();
+    if(!imageId)$('saveState').innerHTML=oldImg?'<b>Saved</b>, but the session image could not be updated (the previous one is kept).':'<b>Saved</b>, but the session image could not be stored.';
+  }catch(e){if(imageId&&assets){try{await assets.delete(imageId)}catch(e2){}}busy=false;render();
+    $('saveState').innerHTML=`<span style="color:var(--bad)">Not saved: ${e&&e.status===409?'someone changed this session in History after you saved it. Open it from History to see their version.':esc(e&&e.message||'storage error')+'. Try again.'}</span>`;}}
 
 /* ---------- grid calibration ---------- */
 const gBind=[['gCols','cols'],['gRows','rows'],['gOrder','order'],['gGW','gw'],['gGH','gh'],['gAir','air'],['gTh','th'],['gBd','bd']];
@@ -235,7 +269,7 @@ async function renderCompare(){const ss=picked.map(id=>sessions.find(s=>s._id===
     const acts=document.createElement('div');acts.className='actions';acts.style.marginTop='8px';
     const edit=document.createElement('button');edit.type='button';edit.textContent='Edit session';edit.onclick=()=>openEdit(s._id);
     const del=document.createElement('button');del.type='button';del.className='danger';del.textContent='Delete session';
-    del.onclick=async()=>{if(del.dataset.armed!=='1'){del.dataset.armed='1';del.textContent='Click again to delete for everyone';return;}
+    del.onclick=async()=>{if(del.dataset.armed!=='1'){del.dataset.armed='1';del.textContent='Click again to delete for everyone';setTimeout(()=>{del.dataset.armed='';del.textContent='Delete session';},4000);return;}
       try{await db.collection('sessions').doc(s._id).delete();picked=picked.filter(x=>x!==s._id);}catch(e){del.textContent='Delete failed';}};
     acts.append(edit,del);d.appendChild(acts);box.appendChild(d);
     cv.width=s.W||1920;cv.height=s.H||1080;const x=cv.getContext('2d'),im=await loadImg(s.imageId);
@@ -256,14 +290,18 @@ const E_LOAD_TIP='Missing or wrong ball? Load the original screenshots of this s
 const eMeta=[['eDate','date'],['eOp','operator'],['ePsi','psi'],['eSpeed','speed'],['eCyl','cyl'],['eR1','r1'],['eR2','r2'],['eNotes','notes']];
 function openEdit(id){const s=sessions.find(x=>x._id===id);if(!s)return;
   ed={id,src:s,fireball:s.fireball,shots:(s.shots||[]).map(q=>({...q,px:q.px?{...q.px}:null})),sel:-1,dirty:false,saving:false,grid:gridCopy(s.grid||G),gridChanged:false};$('eGridEdit').checked=false;
-  eMeta.forEach(([el,k])=>$(el).value=s[k]??'');$('eTitle').textContent=`Edit session · FB ${s.fireball} · ${s.date||''}`;$('eState').textContent='';$('eLoad').textContent=E_LOAD_TIP;
+  eMeta.forEach(([el,k])=>$(el).value=s[k]??'');$('eTitle').textContent=`Edit session · FB ${s.fireball} · ${s.date||''}`;$('eState').textContent='';$('eDelState').textContent='';$('eLoad').textContent=E_LOAD_TIP;
   $('editPanel').hidden=false;$('cmpPanel').hidden=true;renderEdit();$('editPanel').scrollIntoView({behavior:'smooth',block:'start'});}
 function closeEdit(){ed=null;$('editPanel').hidden=true;$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';renderCompare();}
 const gridCopy=g=>JSON.parse(JSON.stringify({cols:g.cols,rows:g.rows,order:g.order,gw:g.gw,gh:g.gh,corners:g.corners,air:g.air,th:g.th}));
 // untouched shots keep their stored cm values; moved ones (or all, once the grid changed) are re-measured with the session's grid
-function editRows(){const s=ed.src,g=ed.grid,gg=geo(g,s.W||1920,s.H||1080);
-  return ed.shots.map((q,i)=>{const r={i,shot:q.n??i+1,file:q.file||'',target:q.target,flag:q.flag};if(!q.px)return r;
-    let x=q.x,y=q.y,sector=q.sector;if(q.moved||ed.gridChanged||x==null||sector==null){[x,y]=apply(gg.toCm,q.px.x,q.px.y);sector=sectorOf(g,x,y);}
+// with the screenshots loaded duplicates are checked on their timestamps, otherwise only identical stored ball positions are flagged
+function editDups(){const sure=ed.shots.every(q=>q.fp);
+  return{sure,dup:dupsOf(ed.shots,sure?(a,b)=>fpSame(a.fp,b.fp):(a,b)=>!!(a.px&&b.px&&a.px.x===b.px.x&&a.px.y===b.px.y))};}
+function editRows(){const s=ed.src,g=ed.grid,gg=geo(g,s.W||1920,s.H||1080),{sure,dup}=editDups();
+  return ed.shots.map((q,i)=>{const r={i,shot:q.n??i+1,file:q.file||'',target:q.target,flag:q.flag,dup:dup[i],dupSure:sure};if(!q.px)return r;
+    let x=q.x,y=q.y,sector=q.sector;if(q.moved||ed.gridChanged||x==null||sector==null){[x,y]=apply(gg.toCm,q.px.x,q.px.y);sector=sectorOf(g,x,y);
+      if(r.flag==='ok'||r.flag==='borderline')r.flag=lineDist(g,x,y)<(g.bd??G.bd)?'borderline':'ok';}
     Object.assign(r,{x,y,sector,px:q.px});
     if(q.target){const[tx,ty]=sectorCentre(g,q.target);r.hit=sector===q.target;r.miss=Math.hypot(x-tx,y-ty);}return r;});}
 function editGate(){const miss=[];if(!ed.fireball)miss.push('fireball');if(!(+$('ePsi').value>0))miss.push('PSI');if(!(+$('eSpeed').value>0))miss.push('speed');if($('eCyl').value==='')miss.push('cylinder distance');if($('eR1').value==='')miss.push('R1');if($('eR2').value==='')miss.push('R2');
@@ -276,7 +314,9 @@ function renderEdit(){if(!ed)return;const s=ed.src,g=ed.grid,rows=editRows(),st=
   const opt=t=>'<option value="">–</option>'+Array.from({length:N},(_,k)=>`<option${t===k+1?' selected':''}>${k+1}</option>`).join('');
   $('eBody').innerHTML=rows.map(r=>{const hit=r.target&&r.sector?(r.hit?' <span class="pill hit">hit</span>':' <span class="pill bad">miss</span>'):'';
     return `<tr class="row${r.i===ed.sel?' sel':''}" data-i="${r.i}"><td class="num">${r.shot}</td><td>${esc(r.file)}</td><td><select data-i="${r.i}" aria-label="Target sector">${opt(r.target)}</select></td><td><span class="sec">${r.sector??'–'}</span>${hit}</td>`+
-      `<td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${PILL[r.flag]||''}</td><td>${r.px?`<button type="button" data-nb="${r.i}" style="padding:2px 8px">No ball</button>`:''}</td></tr>`;}).join('');
+      `<td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${PILL[r.flag]||''}${dupPill(r.dup,r.dupSure)}</td><td><div class="actions" style="flex-wrap:nowrap;gap:6px">${r.px?`<button type="button" data-nb="${r.i}" style="padding:2px 8px">No ball</button>`:''}${delBtn(r.i,r.shot)}</div></td></tr>`;}).join('');
+  const nDup=rows.filter(r=>r.dup!=null).length;
+  $('eDupState').innerHTML=nDup?`<span style="color:${rows[0].dupSure?'var(--bad)':'var(--warn)'}">${rows[0].dupSure?`${nDup} shot${nDup>1?'s were':' was'} uploaded twice (same camera timestamp).`:`${nDup} shot${nDup>1?'s have':' has'} exactly the same ball position as an earlier one: probably uploaded twice. Load the screenshots to be sure.`} Delete ${nDup>1?'them':'it'} in the shot list.</span>`:'';
   $('eGridReset').disabled=!ed.gridChanged;
   const r=rows[ed.sel];$('eHint').textContent=$('eGridEdit').checked?'Drag the yellow corner handles onto the goal corners. Every shot is re-measured with the new grid.':r?`Shot ${r.shot} · target ${r.target??'–'} · landed ${r.sector??'–'}. Click the image where this ball is to move it.`:'Pick a shot (a dot in the sector cards or a row in the shot list), then click the image where its ball is.';
   $('eInsp').hidden=!ed.shots[ed.sel]?.img;drawEdit(rows);drawEditInsp(rows);editGate();}
@@ -307,10 +347,22 @@ async function loadEditShots(list){if(!ed||ed.loading)return;const E=ed,s=E.src,
       if(i===0){base=document.createElement('canvas');base.width=W;base.height=H;base.getContext('2d').drawImage(bmp,0,0);}
       const auto=detect(bmp,{...G,...E.grid});let px=q.px&&{...q.px},crop=null;
       if(px){const near=auto.find(c=>Math.hypot(c.x-px.x,c.y-px.y)<c.r*1.5);px.r=near?near.r:(auto[0]?.r||W/85);crop=makeCrop(bmp,px);}
-      bmp.close&&bmp.close();out.push({img:pick[i],auto,px,crop});if(ed!==E)return;}}
+      const fp=fingerprint(bmp,auto);bmp.close&&bmp.close();out.push({img:pick[i],auto,px,crop,fp});if(ed!==E)return;}}
   catch(e){E.loading=false;if(ed===E){$('eLoad').innerHTML=`<span style="color:var(--bad)">${esc(e.message)}</span>`;editGate();}return;}
   if(ed!==E)return;out.forEach((o,i)=>Object.assign(E.shots[i],o));E.base=base;E.loading=false;
   $('eLoad').textContent=`Screenshots loaded.${note} Pick a shot to check it on its own screenshot; saving rebuilds the session image.`;renderEdit();}
+// same as deleteShot in the Session tab; nothing is stored until Save, Cancel brings everything back
+async function deleteEditShot(i){const E=ed;if(!E||E.loading||E.saving||!E.shots[i])return;
+  const plan=E.src.plan||PLAN,per=E.src.perSector||5,pt=k=>plan[Math.floor(k/per)]??null,gone=E.shots[i];
+  E.undo={shots:E.shots.slice(),targets:E.shots.map(q=>q.target),ns:E.shots.map(q=>q.n),base:E.base,sel:E.sel,name:gone.file||'',n:gone.n??i+1};
+  E.shots.splice(i,1);E.shots.forEach((q,k)=>{if(q.target===pt(k<i?k:k+1))q.target=pt(k);q.n=k+1;});
+  if(i===0&&E.base){const f=E.shots[0]?.img;if(f){const bmp=await createImageBitmap(f),c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);bmp.close&&bmp.close();E.base=c;}}
+  if(ed!==E)return;
+  if(E.sel===i)E.sel=-1;else if(E.sel>i)E.sel--;E.dirty=true;
+  $('eDelState').innerHTML=`Shot ${E.undo.n}${E.undo.name?` (${esc(E.undo.name)})`:''} deleted.${E.base?'':' Its ball stays visible in the stored image until the screenshots are loaded again.'} <button type="button" id="eUndoDel" style="padding:2px 8px">Undo</button>`;
+  $('eUndoDel').onclick=undoEditDelete;renderEdit();}
+function undoEditDelete(){const E=ed;if(!E||!E.undo||E.loading||E.saving)return;const u=E.undo;
+  E.shots=u.shots;E.shots.forEach((q,k)=>{q.target=u.targets[k];q.n=u.ns[k];});E.base=u.base;E.sel=u.sel;E.undo=null;E.dirty=true;$('eDelState').textContent='';renderEdit();}
 async function saveEdit(){if(!ed||!db||!editGate())return;ed.saving=true;editGate();$('eState').textContent='Saving…';
   const s=ed.src,g=ed.grid,rows=editRows(),st=stats(rows),{_id,...base}=s;let imageId=s.imageId;
   if(ed.base){try{imageId=(await assets.upload(await canvasBlob(composeEdit(document.createElement('canvas'))))).id;}
@@ -319,8 +371,9 @@ async function saveEdit(){if(!ed||!db||!editGate())return;ed.saving=true;editGat
     stats:{perfect:sectorSummary(rows.map(r=>({n:r.shot,target:r.target,sector:r.sector??null})),g,s.perSector||5).perfect,balls:st.balls,aimed:st.aimed,hitRate:st.hitRate,meanMiss:st.meanMiss,spread:st.spread,perSector:st.perSector},
     shots:rows.map(r=>({n:r.shot,file:r.file,target:r.target??null,sector:r.sector??null,x:r.x!=null?+r.x.toFixed(1):null,y:r.y!=null?+r.y.toFixed(1):null,
       miss:r.miss!=null?+r.miss.toFixed(1):null,px:r.px?{x:Math.round(r.px.x),y:Math.round(r.px.y)}:null,flag:r.flag}))};
-  try{await db.collection('sessions').doc(ed.id).set(doc);if(s.imageId&&imageId!==s.imageId){try{await assets.delete(s.imageId)}catch(e){}}closeEdit();}
-  catch(e){if(imageId!==s.imageId){try{await assets.delete(imageId)}catch(e2){}}ed.saving=false;editGate();$('eState').innerHTML=`<span style="color:var(--bad)">Not saved: ${esc(e&&e.message||'storage error')}. Try again.</span>`;}}
+  try{await db.collection('sessions').doc(ed.id).set(doc,{base:s.updatedAt||s.createdAt||null});if(s.imageId&&imageId!==s.imageId){try{await assets.delete(s.imageId)}catch(e){}}closeEdit();}
+  catch(e){if(imageId!==s.imageId){try{await assets.delete(imageId)}catch(e2){}}ed.saving=false;editGate();if(e&&e.status===409)refreshSessions();
+    $('eState').innerHTML=`<span style="color:var(--bad)">Not saved: ${e&&e.status===409?'someone else saved this session after you opened it. Cancel and open it again to see their changes.':esc(e&&e.message||'storage error')+'. Try again.'}</span>`;}}
 
 /* ---------- export ---------- */
 let dl=null;
@@ -348,10 +401,11 @@ addEventListener('drop',e=>{e.preventDefault();dragN=0;$('drop').hidden=true;if(
 $('saveBtn').onclick=saveSession;
 $('sgrid').addEventListener('click',e=>{const b=e.target.closest('button.dot');if(!b)return;openInspector(+b.dataset.i);$('inspector').scrollIntoView({behavior:'smooth',block:'start'});});
 $('newBtn').onclick=()=>{if($('newBtn').dataset.armed!=='1'&&cur.shots.length&&cur.dirty){$('newBtn').dataset.armed='1';$('newBtn').textContent='Discard unsaved session?';setTimeout(()=>{$('newBtn').dataset.armed='';$('newBtn').textContent='New session';},4000);return;}
-  $('newBtn').dataset.armed='';$('newBtn').textContent='New session';Object.assign(cur,{fireball:null,plan:PLAN.slice(),shots:[],base:null,savedId:null,savedImg:null,dirty:false});sel=-1;$('inspector').hidden=true;
+  $('newBtn').dataset.armed='';$('newBtn').textContent='New session';Object.assign(cur,{fireball:null,plan:PLAN.slice(),shots:[],base:null,savedId:null,savedImg:null,savedVer:null,savedCreated:null,dirty:false});sel=-1;$('inspector').hidden=true;undoS=null;$('delState').textContent='';
   document.querySelectorAll('#fbs .fb').forEach(x=>x.setAttribute('aria-pressed','false'));$('sNotes').value='';$('sDate').value=new Date().toISOString().slice(0,10);renderPlan();render();scrollTo({top:0});};
 $('inspCv').addEventListener('click',async e=>{const sh=cur.shots[sel];if(!sh)return;const[x,y]=cvPt(e.target,e);const rs=cur.shots.filter(s=>s.pos).map(s=>s.pos.r).sort((a,b)=>a-b),r=rs.length?rs[rs.length>>1]:sh.W/85;
   const near=sh.auto.find(c=>Math.hypot(c.x-x,c.y-y)<c.r*1.5);sh.pos=near?{...near}:{x,y,r};sh.manual=true;const bmp=await createImageBitmap(sh.file);sh.crop=makeCrop(bmp,sh.pos);bmp.close&&bmp.close();cur.dirty=true;render();drawInspector();});
+$('delShotBtn').onclick=()=>{if(sel>=0)deleteShot(sel);};
 $('noBallBtn').onclick=()=>{const sh=cur.shots[sel];if(!sh)return;sh.pos=null;sh.crop=null;sh.manual=true;cur.dirty=true;render();drawInspector();};
 $('autoBtn').onclick=async()=>{const sh=cur.shots[sel];if(!sh)return;sh.manual=false;sh.pos=sh.auto[0]||null;if(sh.pos){const bmp=await createImageBitmap(sh.file);sh.crop=makeCrop(bmp,sh.pos);bmp.close&&bmp.close();}else sh.crop=null;cur.dirty=true;render();drawInspector();};
 $('prevBtn').onclick=()=>{if(sel>0)openInspector(sel-1)};$('nextBtn').onclick=()=>{if(sel<cur.shots.length-1)openInspector(sel+1)};
@@ -368,6 +422,7 @@ $('eNums').onchange=renderEdit;
 $('eSgrid').addEventListener('click',e=>{const b=e.target.closest('button.dot');if(!b||!ed)return;ed.sel=+b.dataset.i;renderEdit();$(ed.shots[ed.sel].img?'eInsp':'eCv').scrollIntoView({behavior:'smooth',block:'nearest'});});
 $('eBody').addEventListener('click',e=>{if(!ed)return;const nb=e.target.closest('button[data-nb]');
   if(nb){setEditPos(+nb.dataset.nb,null,'excluded');return;}
+  const delB=e.target.closest('button[data-del]');if(delB){deleteEditShot(+delB.dataset.del);return;}
   const tr=e.target.closest('tr[data-i]');if(tr&&e.target.tagName!=='SELECT'){ed.sel=+tr.dataset.i;renderEdit();}});
 $('eBody').addEventListener('change',e=>{if(!ed||e.target.tagName!=='SELECT')return;ed.shots[+e.target.dataset.i].target=e.target.value?+e.target.value:null;ed.dirty=true;renderEdit();});
 $('eCv').addEventListener('click',e=>{if(!ed||$('eGridEdit').checked)return;if(ed.sel<0){$('eHint').textContent='Pick a shot first: a dot in the sector cards or a row in the shot list.';return;}
@@ -388,6 +443,7 @@ $('eFileIn').onchange=e=>{if(e.target.files.length)loadEditShots(e.target.files)
 $('eInspCv').addEventListener('click',e=>{const q=ed&&ed.shots[ed.sel];if(!q||!q.img)return;const[x,y]=cvPt(e.target,e);
   const near=(q.auto||[]).find(c=>Math.hypot(c.x-x,c.y-y)<c.r*1.5);setEditPos(ed.sel,near||{x,y},'manual');});
 $('eiNoBall').onclick=()=>{if(ed&&ed.sel>=0)setEditPos(ed.sel,null,'excluded');};
+$('eiDelete').onclick=()=>{if(ed&&ed.sel>=0)deleteEditShot(ed.sel);};
 $('eiAuto').onclick=()=>{const q=ed&&ed.shots[ed.sel];if(!q||!q.auto)return;setEditPos(ed.sel,q.auto[0]||null,q.auto.length>1?'multiple':q.auto.length?'ok':'no ball');};
 $('eiPrev').onclick=()=>{if(ed&&ed.sel>0){ed.sel--;renderEdit();}};$('eiNext').onclick=()=>{if(ed&&ed.sel<ed.shots.length-1){ed.sel++;renderEdit();}};
 $('eiClose').onclick=()=>{if(!ed)return;ed.sel=-1;renderEdit();};
@@ -399,9 +455,9 @@ loadGrid(ls.get('pa.grid',null));lastGridDoc=ls.get('pa.grid',null);renderPlan()
 /* ---------- storage: Vercel API (passcode protected) ---------- */
 let pass=ls.get('pa.pass','');
 const api={
-  raw(method,path,body){return fetch(path,{method,headers:{'content-type':'application/json','x-passcode':pass},body:body===undefined?undefined:JSON.stringify(body)});},
-  async json(method,path,body){const r=await this.raw(method,path,body);if(r.status===401){showLogin('Passcode is wrong or has changed.');throw new Error('passcode needed');}
-    const j=await r.json().catch(()=>null);if(!r.ok)throw new Error((j&&j.error)||('HTTP '+r.status));return j;}
+  raw(method,path,body,headers){return fetch(path,{method,headers:{'content-type':'application/json','x-passcode':pass,...headers},body:body===undefined?undefined:JSON.stringify(body)});},
+  async json(method,path,body,headers){const r=await this.raw(method,path,body,headers);if(r.status===401){showLogin('Passcode is wrong or has changed.');throw new Error('passcode needed');}
+    const j=await r.json().catch(()=>null);if(!r.ok){const err=new Error((j&&j.error)||('HTTP '+r.status));err.status=r.status;throw err;}return j;}
 };
 const listeners=[];
 async function refreshSessions(){try{const docs=await api.json('GET','/api/sessions');const snap={docs:docs.map(d=>({id:d._id,data:()=>d}))};listeners.forEach(f=>f(snap));$('storeBanner').hidden=true;}
@@ -409,7 +465,8 @@ async function refreshSessions(){try{const docs=await api.json('GET','/api/sessi
 const dbShim={
   collection(){return{orderBy(){return this},limit(){return this},
     onSnapshot(cb){listeners.push(cb);refreshSessions();return()=>{}},
-    doc(id){return{set:async d=>{await api.json('PUT','/api/sessions?id='+encodeURIComponent(id),d);refreshSessions();},
+    // opts.base = version (updatedAt || createdAt) the change was made on; the server refuses it if the session changed since
+    doc(id){return{set:async(d,opts)=>{await api.json('PUT','/api/sessions?id='+encodeURIComponent(id),d,opts&&opts.base?{'x-base-version':opts.base}:undefined);refreshSessions();},
                    delete:async()=>{await api.json('DELETE','/api/sessions?id='+encodeURIComponent(id));refreshSessions();}}}}},
   doc(){return{onSnapshot(cb){api.json('GET','/api/grid').then(g=>cb({exists:!!g,data:()=>g})).catch(()=>{});return()=>{}},
                set:d=>api.json('PUT','/api/grid',d)}}

@@ -93,7 +93,7 @@
         <h2 id="inspTitle">Shot</h2>
         <div class="actions">
           <button type="button" id="prevBtn">← Prev</button><button type="button" id="nextBtn">Next →</button>
-          <button type="button" id="noBallBtn">No ball</button><button type="button" id="autoBtn">Auto</button><button type="button" id="closeBtn">Close</button>
+          <button type="button" id="noBallBtn">No ball</button><button type="button" id="autoBtn">Auto</button><button type="button" class="danger" id="delShotBtn">Delete shot</button><button type="button" id="closeBtn">Close</button>
         </div>
       </div>
       <canvas id="inspCv" width="1920" height="1080"></canvas>
@@ -101,10 +101,11 @@
     </section>
 
     <section class="panel">
+      <div class="status" id="delState"></div>
       <details class="fold" id="shotsDet">
         <summary><h2>Shot list</h2><span class="status" id="shotCount"></span></summary>
         <div class="tablewrap">
-          <table><thead><tr><th class="num">#</th><th>File</th><th>Target</th><th>Sector</th><th class="num">x cm</th><th class="num">y cm</th><th class="num">Miss cm</th><th>Check</th></tr></thead><tbody id="tbody"></tbody></table>
+          <table><thead><tr><th class="num">#</th><th>File</th><th>Target</th><th>Sector</th><th class="num">x cm</th><th class="num">y cm</th><th class="num">Miss cm</th><th>Check</th><th></th></tr></thead><tbody id="tbody"></tbody></table>
         </div>
         <div class="empty" id="emptyMsg">No screenshots loaded yet.</div>
       </details>
@@ -212,6 +213,7 @@
         </div>
       </div>
       <div class="status" id="eLoad" style="margin-bottom:8px"></div>
+      <div class="status" id="eDupState" style="margin-bottom:8px"></div>
       <div class="stage editing"><canvas id="eCv" width="1920" height="1080"></canvas></div>
       <div class="status" id="eHint" style="margin-top:8px"></div>
       <div class="inspector" id="eInsp" style="margin-top:14px" hidden>
@@ -219,7 +221,7 @@
           <h2 id="eInspTitle">Shot</h2>
           <div class="actions">
             <button type="button" id="eiPrev">← Prev</button><button type="button" id="eiNext">Next →</button>
-            <button type="button" id="eiNoBall">No ball</button><button type="button" id="eiAuto">Auto</button><button type="button" id="eiClose">Close</button>
+            <button type="button" id="eiNoBall">No ball</button><button type="button" id="eiAuto">Auto</button><button type="button" class="danger" id="eiDelete">Delete shot</button><button type="button" id="eiClose">Close</button>
           </div>
         </div>
         <canvas id="eInspCv" width="1920" height="1080"></canvas>
@@ -232,8 +234,9 @@
         <div class="kpi"><div class="v" id="eKSpread">–</div><div class="l">spread cm</div></div>
       </div>
       <div class="sgrid" id="eSgrid"></div>
+      <div class="status" id="eDelState" style="margin-top:14px"></div>
       <details class="fold" style="margin-top:14px">
-        <summary><h2>Shot list</h2><span class="status">Change targets or mark a shot as no ball.</span></summary>
+        <summary><h2>Shot list</h2><span class="status">Change targets, mark a shot as no ball or delete a shot uploaded twice.</span></summary>
         <div class="tablewrap">
           <table><thead><tr><th class="num">#</th><th>File</th><th>Target</th><th>Sector</th><th class="num">Miss cm</th><th>Check</th><th></th></tr></thead><tbody id="eBody"></tbody></table>
         </div>
