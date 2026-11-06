@@ -7,6 +7,13 @@ Penalty Arena launcher accuracy log. Live at https://precision-session.vercel.ap
 - Fixed protocol: 50 shots, 5 per sector, sectors 1 → 10 (5 × 2 grid, numbered row by row from top-left).
 - Loads the 50 screenshots, detects the ball in the air in each (in the browser), assigns the sector,
   builds a stacked session image and per-sector results (5/5, hit rate, avg miss, spread).
+- Or analyses a whole session video (Analyse video, or drop the video): it is read in this browser, nothing is uploaded.
+  Every shot is found by the same method as the tested Python script: the goal is still, a ball launches, it is followed
+  against the empty goal, and the impact frame is 3 frames before the net moves (or the last frame before the ball hits
+  the post). Pauses over 45 s split the video into sessions; each loads into the Session tab like screenshots, with the
+  ball position from the video ("from video", unsure ones "check"). FB, PSI and cylinder mm are taken from the file
+  name when it has them (e.g. `183mm-fb4-7psi.mp4`). MP4 / MOV with H.264 or HEVC; runs in a worker, so it keeps going
+  when the window is in the background. About 4–5 minutes for 30 minutes of 1080p video.
 - Saves sessions to shared History: trend by fireball, side-by-side compare, CSV/image export.
 - Shots uploaded twice are flagged: every screenshot carries the camera timestamp in the top-right picture-in-picture,
   and two shots with the same timestamp are the same shot. Any shot can be deleted (shot list or the shot view) in the
@@ -20,6 +27,7 @@ Penalty Arena launcher accuracy log. Live at https://precision-session.vercel.ap
 
 ## Structure
 - `index.html`, `style.css`, `app.js` — the whole front end (no build step).
+- `video.js` — the video analysis (MP4 index reader, decoding, shot finder); runs as a Web Worker.
 - `api/sessions.js`, `api/grid.js`, `api/image.js` — Vercel functions; data in a private Vercel Blob store.
 - `api/_lib.js` — passcode check and helpers.
 

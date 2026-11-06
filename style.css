@@ -100,7 +100,8 @@ button.dot:hover{transform:scale(1.15)}
 .sgrid.mini{margin-top:10px;gap:4px;padding:4px;border-width:2px}
 .mini .sc{padding:6px;gap:5px}
 .mini .sc-score{font-size:22px}
-.mini .sc-lab,.mini .sc-m{display:none}
+.mini .sc-lab,.mini .sc-miss{display:none}
+.mini .sc-m{font-size:12px;color:var(--ink)}
 .mini .dot{width:12px;height:12px;border-width:1px;font-size:0}
 details.fold summary{cursor:pointer;list-style:none;display:flex;gap:12px;align-items:baseline}
 details.fold summary::-webkit-details-marker{display:none}
@@ -138,6 +139,7 @@ tr.sel td{background:color-mix(in srgb,var(--accent) 14%,transparent)}
 .empty{color:var(--muted);padding:24px 0;text-align:center}
 .foot{font-size:12px;color:var(--muted)}
 .savebar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.vidbar{display:grid;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 details.cal summary{cursor:pointer;font:600 18px var(--display);text-transform:uppercase;letter-spacing:.06em;list-style:none;display:flex;gap:10px;align-items:center}
 details.cal summary::-webkit-details-marker{display:none}
 .calgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 12px;margin-top:14px}

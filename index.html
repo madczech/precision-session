@@ -59,10 +59,13 @@
       <div class="savebar" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
         <div class="gate" id="gateMsg"></div>
         <div class="actions">
+          <button type="button" id="vidBtn" disabled>Analyse video</button>
+          <input id="vidIn" type="file" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v" hidden>
           <button class="primary" id="addBtn" type="button" disabled>Load screenshots</button>
           <input id="fileIn" type="file" accept="image/*" multiple hidden>
         </div>
       </div>
+      <div class="vidbar" id="vidBar" hidden><span class="status" id="vidState"></span><div class="actions" id="vidSessions"></div></div>
     </section>
 
     <section class="panel">
@@ -252,7 +255,7 @@
     </section>
   </div>
 </div>
-<div class="drop" id="drop" hidden>Drop screenshots</div>
+<div class="drop" id="drop" hidden>Drop screenshots or a video</div>
 
 <script src="/app.js"></script>
 </body>

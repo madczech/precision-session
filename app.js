@@ -8,6 +8,7 @@ let db=null, assets=null, sessions=[], unsubS=null;
 const PLAN=[1,2,3,4,5,6,7,8,9,10];
 const cur={fireball:null,plan:PLAN.slice(),per:5,shots:[],base:null,savedId:null,savedImg:null,dirty:false};
 let sel=-1,busy=false;
+let vid=null;   // video analysis: {run, stop, file} while it runs, {file, res} when done
 const fbColor=fb=>getComputedStyle(document.documentElement).getPropertyValue('--fb'+fb).trim()||'#888';
 
 /* ---------- geometry (grid passed explicitly so saved sessions keep their own) ---------- */
@@ -73,7 +74,7 @@ const planTarget=i=>cur.plan[Math.floor(i/cur.per)]??null;
 function shotRows(){const dup=dupsOf(cur.shots,(a,b)=>fpSame(a.fp,b.fp));return cur.shots.map((sh,i)=>{const r={i,shot:i+1,file:sh.name,target:sh.target,dup:dup[i]};
   if(!sh.pos){r.flag=sh.manual?'excluded':'no ball';return r;}
   const g=geo(G,sh.W,sh.H),[x,y]=apply(g.toCm,sh.pos.x,sh.pos.y);Object.assign(r,{x,y,sector:sectorOf(G,x,y),line:lineDist(G,x,y),px:sh.pos});
-  r.flag=sh.manual?'manual':(sh.auto.length>1?'multiple':(r.line<G.bd?'borderline':'ok'));
+  r.flag=sh.manual?'manual':sh.video?(sh.video.check?'check':r.line<G.bd?'borderline':'video'):(sh.auto.length>1?'multiple':(r.line<G.bd?'borderline':'ok'));
   if(sh.target){const[tx,ty]=sectorCentre(G,sh.target);r.hit=r.sector===sh.target;r.miss=Math.hypot(x-tx,y-ty);}return r;});}
 function stats(rows){const t=rows.filter(r=>r.target&&r.sector!=null),per={};
   t.forEach(r=>{(per[r.target]??=[]).push(r)});const ps={};let spreads=[];
@@ -83,7 +84,7 @@ function stats(rows){const t=rows.filter(r=>r.target&&r.sector!=null),per={};
   return{balls:rows.filter(r=>r.sector!=null).length,aimed:t.length,hitRate:t.length?100*t.filter(r=>r.hit).length/t.length:null,
     meanMiss:t.length?t.reduce((q,r)=>q+r.miss,0)/t.length:null,spread:spreads.length?spreads.reduce((a,b)=>a+b,0)/spreads.length:null,perSector:ps};}
 const fmt=(v,d=0)=>v==null||isNaN(v)?'–':(+v).toFixed(d);
-const PILL={ok:'<span class="pill ok">ok</span>',manual:'<span class="pill">corrected</span>',excluded:'<span class="pill">excluded</span>',borderline:'<span class="pill warn">borderline</span>',multiple:'<span class="pill warn">2+ balls</span>','no ball':'<span class="pill bad">no ball</span>'};
+const PILL={ok:'<span class="pill ok">ok</span>',manual:'<span class="pill">corrected</span>',excluded:'<span class="pill">excluded</span>',borderline:'<span class="pill warn">borderline</span>',multiple:'<span class="pill warn">2+ balls</span>','no ball':'<span class="pill bad">no ball</span>',video:'<span class="pill ok">from video</span>',check:'<span class="pill warn">check</span>'};
 // sure = same screenshot (timestamp checked); otherwise only the stored ball positions are identical
 const dupPill=(j,sure)=>j==null?'':` <span class="pill ${sure?'bad':'warn'}">${sure?'duplicate of':'same as'} #${j+1}${sure?'':'?'}</span>`;
 const delBtn=(i,n)=>`<button type="button" class="danger" data-del="${i}" title="Delete this shot (uploaded twice or not part of the session)" aria-label="Delete shot ${n}" style="padding:2px 8px">Delete</button>`;
@@ -119,7 +120,7 @@ function renderPlan(){const b=$('planBoard');b.style.gridTemplateColumns=`repeat
   $('planText').textContent='Big number = shot numbers fired at that sector. Name the screenshots in shot order (0001–0050).';}
 function afterPlan(){cur.shots.forEach((sh,i)=>{if(!sh.targetManual)sh.target=planTarget(i);});cur.dirty=true;renderPlan();render();}
 function gate(){const miss=[];if(!cur.fireball)miss.push('fireball');if(!(+$('sPsi').value>0))miss.push('PSI');if(!(+$('sSpeed').value>0))miss.push('speed');if($('sCyl').value==='')miss.push('cylinder distance');if($('sR1').value==='')miss.push('R1');if($('sR2').value==='')miss.push('R2');
-  const ok=!miss.length;$('addBtn').disabled=!ok||busy;$('gateMsg').textContent=ok?(cur.shots.length?'Loading new screenshots replaces the current ones.':''):`Fill in first: ${miss.join(', ')}.`;
+  const ok=!miss.length;$('addBtn').disabled=!ok||busy;$('vidBtn').disabled=busy||!!vid?.run;$('gateMsg').textContent=ok?(cur.shots.length?'Loading new screenshots replaces the current ones.':''):`Fill in first: ${miss.join(', ')}.`;
   $('fbReq').hidden=!!cur.fireball;return ok;}
 function sectorSummary(items,g,per){const N=nSect(g),by={};per=per||5;items.forEach(it=>{if(it.target)(by[it.target]??=[]).push(it)});
   const secs=[];let perfect=0,aimed=0;
@@ -132,14 +133,14 @@ function cardsHTML(sum,g,perSector,interactive){let h='';
     if(!c)continue;const lab=c.lvl==='perfect'?'all in':c.lvl==='empty'?'no shots':`${c.n-c.hits} out`;
     const dots=c.shots.map(it=>{const cls=it.sector===s?'hit':it.sector==null?'none':'miss',tip=`Shot ${it.n}: ${cls==='hit'?'hit':cls==='none'?'no ball found':'landed in sector '+it.sector}`;
       return interactive?`<button type="button" class="dot ${cls}" data-i="${it.i}" title="${tip}" aria-label="${tip}">${cls==='miss'?it.sector:''}</button>`:`<span class="dot ${cls}" title="${tip}">${cls==='miss'?it.sector:''}</span>`;}).join('');
-    h+=`<div class="sc ${c.lvl}"><div class="sc-h"><span class="sc-n">S${s}</span><span class="sc-score">${c.n?c.hits+'/'+c.n:'–'}</span></div><div class="sc-lab">${lab}</div><div class="sc-dots">${dots}</div><div class="sc-m">${p?`miss ${fmt(p.meanMiss)} · spread ${fmt(p.spread)}`:''}</div></div>`;}
+    h+=`<div class="sc ${c.lvl}"><div class="sc-h"><span class="sc-n">S${s}</span><span class="sc-score">${c.n?c.hits+'/'+c.n:'–'}</span></div><div class="sc-lab">${lab}</div><div class="sc-dots">${dots}</div><div class="sc-m">${p?`<span class="sc-miss">miss ${fmt(p.meanMiss)} · </span>spread ${fmt(p.spread)} cm`:''}</div></div>`;}
   return h;}
 function perfectOf(s){const g=s.grid||G;return sectorSummary((s.shots||[]).map(q=>({n:q.n,target:q.target,sector:q.sector})),g,s.perSector||5).perfect;}
 function render(){
   drawStage();const rows=shotRows(),st=stats(rows),exp=expected();
   $('counter').innerHTML=`${cur.shots.length} <small>/ ${exp||'–'} shots</small>`;$('counter').classList.toggle('off',cur.shots.length>0&&cur.shots.length!==exp);
   const nDup=rows.filter(r=>r.dup!=null).length;
-  if(!busy)$('status').innerHTML=cur.shots.length?`<b>${st.balls}</b> balls in the air`+(rows.some(r=>r.flag==='no ball')?` · <b>${rows.filter(r=>r.flag==='no ball').length}</b> without ball`:'')+(nDup?` · <span style="color:var(--bad)"><b>${nDup}</b> uploaded twice: delete ${nDup>1?'them':'it'} in the shot list</span>`:''):'';
+  if(!busy)$('status').innerHTML=cur.shots.length?`<b>${st.balls}</b> balls in the air`+(rows.some(r=>r.flag==='no ball')?` · <b>${rows.filter(r=>r.flag==='no ball').length}</b> without ball`:'')+(rows.some(r=>r.flag==='check')?` · <b>${rows.filter(r=>r.flag==='check').length}</b> to check`:'')+(nDup?` · <span style="color:var(--bad)"><b>${nDup}</b> uploaded twice: delete ${nDup>1?'them':'it'} in the shot list</span>`:''):'';
   $('kHit').textContent=st.hitRate==null?'–':Math.round(st.hitRate)+'%';$('kMiss').textContent=fmt(st.meanMiss);$('kSpread').textContent=fmt(st.spread);
   const N=nSect(G),items=rows.map(r=>({n:r.shot,i:r.i,target:r.target,sector:r.sector??null})),sum=sectorSummary(items,G,cur.per);
   const sg=$('sgrid');sg.style.setProperty('--cols',G.cols);sg.innerHTML=cardsHTML(sum,G,st.perSector,true);
@@ -178,16 +179,50 @@ async function deleteShot(i){if(busy||!cur.shots[i])return;const gone=cur.shots[
 function undoDelete(){if(!undoS||busy)return;cur.shots=undoS.shots;cur.shots.forEach((sh,k)=>sh.target=undoS.targets[k]);cur.base=undoS.base;sel=undoS.sel;
   $('inspector').hidden=sel<0;undoS=null;$('delState').textContent='';cur.dirty=true;render();if(sel>=0)drawInspector();}
 
+/* ---------- video (analysed in this browser, see video.js) ---------- */
+const isVideo=f=>/^video\//.test(f.type)||/\.(mp4|mov|m4v)$/i.test(f.name);
+const vTime=us=>{const s=Math.round(us/1e6);return`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;};
+// "183mm-fb4-7psi..." fills in fireball, PSI and cylinder distance when they are still empty
+function settingsFromName(n){const got=[],fb=/fb\s*([245])(?!\d)/i.exec(n),psi=/(\d+(?:[.,]\d+)?)\s*psi/i.exec(n),cyl=/(\d+(?:[.,]\d+)?)\s*mm/i.exec(n);
+  if(fb&&!cur.fireball){document.querySelector(`#fbs .fb[data-fb="${fb[1]}"]`).click();got.push('FB '+fb[1]);}
+  if(psi&&!$('sPsi').value){$('sPsi').value=psi[1].replace(',','.');got.push(psi[1]+' PSI');}
+  if(cyl&&!$('sCyl').value){$('sCyl').value=cyl[1].replace(',','.');got.push('cyl '+cyl[1]+' mm');}
+  return got;}
+// the analysis runs in a worker; Stop ends it at once
+function inWorker(file,grid,progress,stop){return new Promise((ok,fail)=>{const w=new Worker('/video.js');
+  const t=setInterval(()=>{if(stop()){clearInterval(t);w.terminate();ok(null);}},200);
+  w.onmessage=e=>{const d=e.data;if(d.progress)progress(...d.progress);else{clearInterval(t);w.terminate();d.error?fail(new Error(d.error)):ok(d.done);}};
+  w.onerror=e=>{clearInterval(t);w.terminate();fail(new Error(e.message||'The video analysis stopped unexpectedly.'));};
+  w.postMessage({file,grid:{corners:grid.corners}});});}
+async function runVideo(file){if(vid?.run)return;const got=settingsFromName(file.name);
+  vid={run:true,stop:false,file};$('vidBar').hidden=false;$('vidSessions').innerHTML='<button type="button" id="vidStop">Stop</button>';$('vidStop').onclick=()=>{if(vid)vid.stop=true;};render();
+  const from=got.length?` · from the file name: ${esc(got.join(', '))} (check them)`:'';
+  $('vidState').innerHTML=`Opening <b>${esc(file.name)}</b>…`;
+  try{const res=await inWorker(file,G,(n,N,k,s)=>{$('vidState').innerHTML=`Reading <b>${esc(file.name)}</b> on this computer (nothing is uploaded) · <b>${Math.round(100*n/N)}%</b> · ${k} shots so far`+(n>N*.03?` · about ${Math.max(1,Math.round(s*(N-n)/n/60))} min left`:'')+from;},()=>vid.stop);
+    if(!res){vid=null;$('vidBar').hidden=true;render();return;}
+    vid={run:false,file,res};showVideoSessions(from);}
+  catch(e){vid=null;$('vidState').innerHTML=`<span style="color:var(--bad)">Could not analyse the video: ${esc(e&&e.message||e)}</span>`;$('vidSessions').innerHTML='';}
+  render();}
+function showVideoSessions(from=''){const{file,res}=vid,ss=res.sessions,n=ss.reduce((a,s)=>a+s.length,0);
+  $('vidState').innerHTML=ss.length?`<b>${esc(file.name)}</b>: <b>${n}</b> shots in <b>${ss.length}</b> session${ss.length>1?'s':''} (read in ${Math.round(res.seconds)} s). Load a session to check it and save it, one at a time.${from}`:`No shots found in <b>${esc(file.name)}</b>.`;
+  $('vidSessions').innerHTML=ss.map((s,k)=>{const c=s.filter(q=>q.check).length;
+    return`<button type="button" data-vs="${k}" aria-pressed="false">Session ${k+1} · ${s.length} shots · ${vTime(s[0].t)}–${vTime(s[s.length-1].t)}${c?` · ${c} to check`:''}</button>`;}).join('');
+  $('vidSessions').querySelectorAll('[data-vs]').forEach(b=>b.onclick=async()=>{if(!gate()){$('gateMsg').scrollIntoView({block:'center'});return;}
+    const s=vid.res.sessions[+b.dataset.vs];await loadShots(s.map(q=>({file:q.file,video:{x:q.x,y:q.y,r:q.r,check:q.check}})));
+    $('vidSessions').querySelectorAll('[data-vs]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});}
+
 /* ---------- loading ---------- */
-async function loadFiles(list){if(busy||!gate())return;busy=true;sel=-1;$('inspector').hidden=true;
-  const files=[...list].filter(f=>/^image\//.test(f.type)||/\.(png|jpe?g|webp)$/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
-  cur.shots=files.map((f,i)=>({file:f,name:f.name,target:planTarget(i),auto:[],pos:null,manual:false,crop:null}));cur.base=null;cur.savedId=null;cur.savedImg=null;cur.savedVer=null;cur.savedCreated=null;cur.dirty=true;
+function loadFiles(list){const files=[...list].filter(f=>/^image\//.test(f.type)||/\.(png|jpe?g|webp)$/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  return loadShots(files.map(f=>({file:f})));}
+// items: {file, video?:{x,y,r,check}} - video shots bring their ball position with them
+async function loadShots(items){if(busy||!gate())return;busy=true;sel=-1;$('inspector').hidden=true;
+  cur.shots=items.map((it,i)=>({file:it.file,name:it.file.name,video:it.video||null,target:planTarget(i),auto:[],pos:null,manual:false,crop:null}));cur.base=null;cur.savedId=null;cur.savedImg=null;cur.savedVer=null;cur.savedCreated=null;cur.dirty=true;
   undoS=null;$('delState').textContent='';
   renderPlan();await analyseAll();}
 async function analyseAll(){busy=true;$('rerunBtn').disabled=true;
   for(let i=0;i<cur.shots.length;i++){$('status').innerHTML=`Analysing <b>${i+1}</b> / ${cur.shots.length}…`;const sh=cur.shots[i],bmp=await createImageBitmap(sh.file);sh.W=bmp.width;sh.H=bmp.height;
     if(i===0){const c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);cur.base={canvas:c,W:bmp.width,H:bmp.height};}
-    sh.auto=detect(bmp);sh.fp=fingerprint(bmp,sh.auto);if(!sh.manual)sh.pos=sh.auto[0]||null;sh.crop=sh.pos?makeCrop(bmp,sh.pos):null;bmp.close&&bmp.close();
+    sh.auto=sh.video?[{x:sh.video.x,y:sh.video.y,r:sh.video.r}]:detect(bmp);sh.fp=fingerprint(bmp,sh.auto);if(!sh.manual)sh.pos=sh.auto[0]||null;sh.crop=sh.pos?makeCrop(bmp,sh.pos):null;bmp.close&&bmp.close();
     if(i%5===4||i===cur.shots.length-1){render();await new Promise(r=>setTimeout(r,0));}}
   busy=false;$('rerunBtn').disabled=G.locked;cur.dirty=true;render();}
 
@@ -272,7 +307,7 @@ async function deleteSession(s){await db.collection('sessions').doc(s._id).delet
 async function renderCompare(){const ss=picked.map(id=>sessions.find(s=>s._id===id)).filter(Boolean);$('cmpPanel').hidden=!ss.length||!!ed;if(!ss.length||ed)return;
   $('cmpTitle').textContent=ss.length===2?'Compare':'Session';const box=$('cmpBox');box.innerHTML='';
   for(const s of ss){const d=document.createElement('div'),cv=document.createElement('canvas');d.appendChild(cv);const sg2=s.grid||G,mg=document.createElement('div');mg.className='sgrid mini';mg.style.setProperty('--cols',sg2.cols);
-    mg.innerHTML=cardsHTML(sectorSummary((s.shots||[]).map(q=>({n:q.n,target:q.target,sector:q.sector})),sg2,s.perSector||5),sg2,null,false);d.appendChild(mg);
+    mg.innerHTML=cardsHTML(sectorSummary((s.shots||[]).map(q=>({n:q.n,target:q.target,sector:q.sector})),sg2,s.perSector||5),sg2,s.stats?.perSector,false);d.appendChild(mg);
     const m=document.createElement('p');m.className='meta';m.innerHTML=`<span class="fbtag" style="--fbc:var(--fb${esc(s.fireball)})">FB ${esc(s.fireball)}</span> ${esc(s.date)} · ${esc(s.psi??'–')} PSI · ${esc(s.speed??'–')} km/h · cyl ${esc(s.cyl??'–')} mm · R1 ${esc(s.r1??'–')} · R2 ${esc(s.r2??'–')} · ${esc(s.operator||'')} ${s.notes?'· '+esc(s.notes):''}`;d.appendChild(m);
     const acts=document.createElement('div');acts.className='actions';acts.style.marginTop='8px';
     const edit=document.createElement('button');edit.type='button';edit.textContent='Edit session';edit.onclick=()=>openEdit(s._id);
@@ -310,7 +345,7 @@ function editDups(){const sure=ed.shots.every(q=>q.fp);
 function editRows(){const s=ed.src,g=ed.grid,gg=geo(g,s.W||1920,s.H||1080),{sure,dup}=editDups();
   return ed.shots.map((q,i)=>{const r={i,shot:q.n??i+1,file:q.file||'',target:q.target,flag:q.flag,dup:dup[i],dupSure:sure};if(!q.px)return r;
     let x=q.x,y=q.y,sector=q.sector;if(q.moved||ed.gridChanged||x==null||sector==null){[x,y]=apply(gg.toCm,q.px.x,q.px.y);sector=sectorOf(g,x,y);
-      if(r.flag==='ok'||r.flag==='borderline')r.flag=lineDist(g,x,y)<(g.bd??G.bd)?'borderline':'ok';}
+      if(r.flag==='ok'||r.flag==='borderline'||r.flag==='video')r.flag=lineDist(g,x,y)<(g.bd??G.bd)?'borderline':q.flag==='video'?'video':'ok';}
     Object.assign(r,{x,y,sector,px:q.px});
     if(q.target){const[tx,ty]=sectorCentre(g,q.target);r.hit=sector===q.target;r.miss=Math.hypot(x-tx,y-ty);}return r;});}
 function editGate(){const miss=[];if(!ed.fireball)miss.push('fireball');if(!(+$('ePsi').value>0))miss.push('PSI');if(!(+$('eSpeed').value>0))miss.push('speed');if($('eCyl').value==='')miss.push('cylinder distance');if($('eR1').value==='')miss.push('R1');if($('eR2').value==='')miss.push('R2');
@@ -400,12 +435,14 @@ $('imgBtn').onclick=()=>{if(!cur.base)return;const cv=composeClean();const pts=c
 document.querySelectorAll('#fbs .fb').forEach(b=>b.onclick=()=>{cur.fireball=+b.dataset.fb;document.querySelectorAll('#fbs .fb').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));cur.dirty=true;render();});
 ['sDate','sOp','sNotes','sPsi','sSpeed','sCyl','sR1','sR2'].forEach(id=>$(id).addEventListener('input',()=>{cur.dirty=true;render();}));
 $('addBtn').onclick=()=>$('fileIn').click();
+$('vidBtn').onclick=()=>$('vidIn').click();
+$('vidIn').onchange=e=>{if(e.target.files[0])runVideo(e.target.files[0]);e.target.value='';};
 $('fileIn').onchange=e=>{if(e.target.files.length)loadFiles(e.target.files);e.target.value='';};
 let dragN=0;
 addEventListener('dragenter',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')&&(!$('viewS').hidden||(ed&&!$('viewH').hidden))){dragN++;$('drop').hidden=false;}});
 addEventListener('dragleave',()=>{dragN=Math.max(0,dragN-1);if(!dragN)$('drop').hidden=true;});
 addEventListener('dragover',e=>e.preventDefault());
-addEventListener('drop',e=>{e.preventDefault();dragN=0;$('drop').hidden=true;if(e.dataTransfer.files.length){if(ed&&!$('viewH').hidden)loadEditShots(e.dataTransfer.files);else if(gate())loadFiles(e.dataTransfer.files);else $('gateMsg').scrollIntoView({block:'center'});}});
+addEventListener('drop',e=>{e.preventDefault();dragN=0;$('drop').hidden=true;if(e.dataTransfer.files.length){const v=[...e.dataTransfer.files].find(isVideo);if(ed&&!$('viewH').hidden)loadEditShots(e.dataTransfer.files);else if(v)runVideo(v);else if(gate())loadFiles(e.dataTransfer.files);else $('gateMsg').scrollIntoView({block:'center'});}});
 ['tNums','tGrid'].forEach(id=>$(id).addEventListener('change',render));
 $('saveBtn').onclick=saveSession;
 $('sgrid').addEventListener('click',e=>{const b=e.target.closest('button.dot');if(!b)return;openInspector(+b.dataset.i);$('inspector').scrollIntoView({behavior:'smooth',block:'start'});});
