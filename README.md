@@ -3,7 +3,8 @@
 Penalty Arena launcher accuracy log. Live at https://precision-session.vercel.app (team passcode required).
 
 ## What it does
-- Session setup: fireball (FB 2 / 4 / 5), PSI, speed km/h, cylinder distance mm, R1, R2 — all required.
+- Session setup: fireball (FB 2 / 4 / 5), PSI, speed km/h, cylinder distance mm, R1, R2 and the machine calibration
+  values for sectors A–E — all required. Calibration is editable in History; sessions saved before it existed may stay without it.
 - Fixed protocol: 50 shots, 5 per sector, sectors 1 → 10 (5 × 2 grid, numbered row by row from top-left).
 - Loads the 50 screenshots, detects the ball in the air in each (in the browser), assigns the sector,
   builds a stacked session image and per-sector results (5/5, hit rate, avg miss, spread).

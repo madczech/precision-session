@@ -119,7 +119,10 @@ function renderPlan(){const b=$('planBoard');b.style.gridTemplateColumns=`repeat
     const d=document.createElement('div');d.className='pcell'+(k>=0?' on':'');d.innerHTML=`${s}${k>=0?`<span class="ord">${k*cur.per+1}–${(k+1)*cur.per}</span>`:''}`;b.appendChild(d);}
   $('planText').textContent='Big number = shot numbers fired at that sector. Name the screenshots in shot order (0001–0050).';}
 function afterPlan(){cur.shots.forEach((sh,i)=>{if(!sh.targetManual)sh.target=planTarget(i);});cur.dirty=true;renderPlan();render();}
-function gate(){const miss=[];if(!cur.fireball)miss.push('fireball');if(!(+$('sPsi').value>0))miss.push('PSI');if(!(+$('sSpeed').value>0))miss.push('speed');if($('sCyl').value==='')miss.push('cylinder distance');if($('sR1').value==='')miss.push('R1');if($('sR2').value==='')miss.push('R2');
+// machine calibration, one value per sector A–E; p is the form prefix ('s' setup, 'e' editor)
+const CAL=['A','B','C','D','E'];
+const calMiss=p=>CAL.filter(k=>$(p+'Cal'+k).value===''),calOf=p=>Object.fromEntries(CAL.map(k=>[k,+$(p+'Cal'+k).value]));
+function gate(){const miss=[];if(!cur.fireball)miss.push('fireball');if(!(+$('sPsi').value>0))miss.push('PSI');if(!(+$('sSpeed').value>0))miss.push('speed');if($('sCyl').value==='')miss.push('cylinder distance');if($('sR1').value==='')miss.push('R1');if($('sR2').value==='')miss.push('R2');if(calMiss('s').length)miss.push('calibration '+calMiss('s').join(', '));
   const ok=!miss.length;$('addBtn').disabled=!ok||busy;$('vidBtn').disabled=busy||!!vid?.run;$('gateMsg').textContent=ok?(cur.shots.length?'Loading new screenshots replaces the current ones.':''):`Fill in first: ${miss.join(', ')}.`;
   $('fbReq').hidden=!!cur.fireball;return ok;}
 function sectorSummary(items,g,per){const N=nSect(g),by={};per=per||5;items.forEach(it=>{if(it.target)(by[it.target]??=[]).push(it)});
@@ -157,12 +160,12 @@ function render(){
     tr.onclick=e=>{if(e.target.tagName==='SELECT')return;if(e.target.closest('button[data-del]')){deleteShot(r.i);return;}openInspector(r.i)};tb.appendChild(tr);});
   tb.querySelectorAll('select').forEach(s=>s.onchange=e=>{const sh=cur.shots[+e.target.dataset.i];sh.target=e.target.value?+e.target.value:null;sh.targetManual=true;cur.dirty=true;render();});
   // save state
-  const canSave=cur.shots.length>0&&cur.fireball&&+$('sPsi').value>0&&+$('sSpeed').value>0&&$('sCyl').value!==''&&$('sR1').value!==''&&$('sR2').value!==''&&db&&!busy;$('saveBtn').disabled=!canSave||(cur.savedId&&!cur.dirty);
+  const canSave=cur.shots.length>0&&cur.fireball&&+$('sPsi').value>0&&+$('sSpeed').value>0&&$('sCyl').value!==''&&$('sR1').value!==''&&$('sR2').value!==''&&!calMiss('s').length&&db&&!busy;$('saveBtn').disabled=!canSave||(cur.savedId&&!cur.dirty);
   $('saveBtn').textContent=cur.savedId?(cur.dirty?'Update saved session':'Saved'):'Save session';
   if(!cur.shots.length)$('saveState').textContent='Nothing to save yet.';
   else if(cur.savedId&&!cur.dirty)$('saveState').innerHTML='<b>Saved.</b> It is in History.';
   else $('saveState').innerHTML=`FB ${cur.fireball??'?'} · ${cur.shots.length} of ${exp} shots`+(cur.shots.length!==exp?` · <span style="color:var(--warn)">count does not match the plan</span>`:'')+(cur.savedId?' · changed since saving':'');
-  $('setupState').textContent=cur.fireball?`FB ${cur.fireball} · ${$('sPsi').value||'?'} PSI · ${$('sSpeed').value||'?'} km/h · cyl ${$('sCyl').value||'?'} · R1 ${$('sR1').value||'?'} · R2 ${$('sR2').value||'?'} · ${exp} shots`:'';
+  $('setupState').textContent=cur.fireball?`FB ${cur.fireball} · ${$('sPsi').value||'?'} PSI · ${$('sSpeed').value||'?'} km/h · cyl ${$('sCyl').value||'?'} · R1 ${$('sR1').value||'?'} · R2 ${$('sR2').value||'?'} · cal ${CAL.map(k=>k+' '+($('sCal'+k).value||'?')).join(' ')} · ${exp} shots`:'';
   gate();}
 function openInspector(i){sel=i;$('inspector').hidden=false;render();drawInspector();}
 // the stacked image is drawn on the first screenshot, so it is rebuilt when that shot goes
@@ -233,7 +236,7 @@ async function saveSession(){if(!db||!cur.shots.length)return;busy=true;$('saveB
   try{const rows=shotRows(),st=stats(rows),id=cur.savedId||`${$('sDate').value||new Date().toISOString().slice(0,10)}_FB${cur.fireball}_${Math.random().toString(36).slice(2,7)}`;
     if(assets){try{const up=await assets.upload(await canvasBlob(composeClean()),{type:'image/jpeg'});imageId=up.id;}catch(e){console.warn(e);}}
     const now=new Date().toISOString();
-    const doc={fireball:cur.fireball,psi:+$('sPsi').value,speed:+$('sSpeed').value,cyl:+$('sCyl').value,r1:+$('sR1').value,r2:+$('sR2').value,date:$('sDate').value,operator:$('sOp').value.trim(),notes:$('sNotes').value.trim(),plan:cur.plan.slice(),perSector:cur.per,
+    const doc={fireball:cur.fireball,psi:+$('sPsi').value,speed:+$('sSpeed').value,cyl:+$('sCyl').value,r1:+$('sR1').value,r2:+$('sR2').value,cal:calOf('s'),date:$('sDate').value,operator:$('sOp').value.trim(),notes:$('sNotes').value.trim(),plan:cur.plan.slice(),perSector:cur.per,
       // a failed re-upload keeps the last stored image instead of none
       expected:expected(),createdAt:cur.savedCreated||now,...(cur.savedId?{updatedAt:now}:{}),imageId:imageId||oldImg||null,W:cur.base.W,H:cur.base.H,
       grid:{cols:G.cols,rows:G.rows,order:G.order,gw:G.gw,gh:G.gh,corners:G.corners,air:G.air,th:G.th},
@@ -333,7 +336,7 @@ const E_LOAD_TIP='Missing or wrong ball? Load the original screenshots of this s
 const eMeta=[['eDate','date'],['eOp','operator'],['ePsi','psi'],['eSpeed','speed'],['eCyl','cyl'],['eR1','r1'],['eR2','r2'],['eNotes','notes']];
 function openEdit(id){const s=sessions.find(x=>x._id===id);if(!s)return;
   ed={id,src:s,fireball:s.fireball,shots:(s.shots||[]).map(q=>({...q,px:q.px?{...q.px}:null})),sel:-1,dirty:false,saving:false,grid:gridCopy(s.grid||G),gridChanged:false};$('eGridEdit').checked=false;
-  eMeta.forEach(([el,k])=>$(el).value=s[k]??'');$('eTitle').textContent=`Edit session · FB ${s.fireball} · ${s.date||''}`;$('eState').textContent='';$('eDelState').textContent='';$('eLoad').textContent=E_LOAD_TIP;
+  eMeta.forEach(([el,k])=>$(el).value=s[k]??'');CAL.forEach(k=>$('eCal'+k).value=s.cal?.[k]??'');$('eTitle').textContent=`Edit session · FB ${s.fireball} · ${s.date||''}`;$('eState').textContent='';$('eDelState').textContent='';$('eLoad').textContent=E_LOAD_TIP;
   $('editPanel').hidden=false;$('cmpPanel').hidden=true;renderEdit();$('editPanel').scrollIntoView({behavior:'smooth',block:'start'});}
 function closeEdit(){ed=null;$('editPanel').hidden=true;$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';
   const d=$('eDelete');clearTimeout(d._t);d.dataset.armed='';d.textContent='Delete session';renderCompare();}
@@ -349,6 +352,8 @@ function editRows(){const s=ed.src,g=ed.grid,gg=geo(g,s.W||1920,s.H||1080),{sure
     Object.assign(r,{x,y,sector,px:q.px});
     if(q.target){const[tx,ty]=sectorCentre(g,q.target);r.hit=sector===q.target;r.miss=Math.hypot(x-tx,y-ty);}return r;});}
 function editGate(){const miss=[];if(!ed.fireball)miss.push('fireball');if(!(+$('ePsi').value>0))miss.push('PSI');if(!(+$('eSpeed').value>0))miss.push('speed');if($('eCyl').value==='')miss.push('cylinder distance');if($('eR1').value==='')miss.push('R1');if($('eR2').value==='')miss.push('R2');
+  // sessions saved before calibration existed may stay without it, but once any value is entered all five are needed
+  const cm=calMiss('e');if(cm.length&&(ed.src.cal||cm.length<CAL.length))miss.push('calibration '+cm.join(', '));
   const ok=!miss.length;$('eSave').disabled=!ok||!ed.dirty||ed.saving||ed.loading;$('eDelete').disabled=!!(ed.saving||ed.loading);$('eLoadBtn').disabled=!!ed.loading;$('eGate').textContent=ok?(ed.dirty?'Unsaved changes.':''):`Fill in first: ${miss.join(', ')}.`;
   document.querySelectorAll('#eFbs .fb').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.fb===ed.fireball)));return ok;}
 function renderEdit(){if(!ed)return;const s=ed.src,g=ed.grid,rows=editRows(),st=stats(rows),N=nSect(g);
@@ -411,7 +416,7 @@ async function saveEdit(){if(!ed||!db||!editGate())return;ed.saving=true;editGat
   const s=ed.src,g=ed.grid,rows=editRows(),st=stats(rows),{_id,...base}=s;let imageId=s.imageId;
   if(ed.base){try{imageId=(await assets.upload(await canvasBlob(composeEdit(document.createElement('canvas'))))).id;}
     catch(e){ed.saving=false;editGate();$('eState').innerHTML=`<span style="color:var(--bad)">Not saved: the session image could not be stored (${esc(e&&e.message||'storage error')}). Try again.</span>`;return;}}
-  const doc={...base,imageId,grid:g,fireball:ed.fireball,psi:+$('ePsi').value,speed:+$('eSpeed').value,cyl:+$('eCyl').value,r1:+$('eR1').value,r2:+$('eR2').value,date:$('eDate').value,operator:$('eOp').value.trim(),notes:$('eNotes').value.trim(),updatedAt:new Date().toISOString(),
+  const doc={...base,imageId,grid:g,fireball:ed.fireball,psi:+$('ePsi').value,speed:+$('eSpeed').value,cyl:+$('eCyl').value,r1:+$('eR1').value,r2:+$('eR2').value,...(calMiss('e').length?{}:{cal:calOf('e')}),date:$('eDate').value,operator:$('eOp').value.trim(),notes:$('eNotes').value.trim(),updatedAt:new Date().toISOString(),
     stats:{perfect:sectorSummary(rows.map(r=>({n:r.shot,target:r.target,sector:r.sector??null})),g,s.perSector||5).perfect,balls:st.balls,aimed:st.aimed,hitRate:st.hitRate,meanMiss:st.meanMiss,spread:st.spread,perSector:st.perSector},
     shots:rows.map(r=>({n:r.shot,file:r.file,target:r.target??null,sector:r.sector??null,x:r.x!=null?+r.x.toFixed(1):null,y:r.y!=null?+r.y.toFixed(1):null,
       miss:r.miss!=null?+r.miss.toFixed(1):null,px:r.px?{x:Math.round(r.px.x),y:Math.round(r.px.y)}:null,flag:r.flag}))};
@@ -433,7 +438,7 @@ $('imgBtn').onclick=()=>{if(!cur.base)return;const cv=composeClean();const pts=c
 
 /* ---------- events ---------- */
 document.querySelectorAll('#fbs .fb').forEach(b=>b.onclick=()=>{cur.fireball=+b.dataset.fb;document.querySelectorAll('#fbs .fb').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));cur.dirty=true;render();});
-['sDate','sOp','sNotes','sPsi','sSpeed','sCyl','sR1','sR2'].forEach(id=>$(id).addEventListener('input',()=>{cur.dirty=true;render();}));
+['sDate','sOp','sNotes','sPsi','sSpeed','sCyl','sR1','sR2',...CAL.map(k=>'sCal'+k)].forEach(id=>$(id).addEventListener('input',()=>{cur.dirty=true;render();}));
 $('addBtn').onclick=()=>$('fileIn').click();
 $('vidBtn').onclick=()=>$('vidIn').click();
 $('vidIn').onchange=e=>{if(e.target.files[0])runVideo(e.target.files[0]);e.target.value='';};
@@ -463,7 +468,7 @@ addEventListener('hashchange',()=>showTab(location.hash.slice(1)));
 document.querySelectorAll('#fbFilter button').forEach(b=>b.onclick=()=>{filt=b.dataset.f;document.querySelectorAll('#fbFilter button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderHistory();});
 $('metric').onchange=()=>renderChart(shownSessions());$('cNums').onchange=renderCompare;
 document.querySelectorAll('#eFbs .fb').forEach(b=>b.onclick=()=>{if(!ed)return;ed.fireball=+b.dataset.fb;ed.dirty=true;editGate();});
-eMeta.forEach(([id])=>$(id).addEventListener('input',()=>{if(!ed)return;ed.dirty=true;editGate();}));
+[...eMeta.map(([id])=>id),...CAL.map(k=>'eCal'+k)].forEach(id=>$(id).addEventListener('input',()=>{if(!ed)return;ed.dirty=true;editGate();}));
 $('eNums').onchange=renderEdit;
 $('eSgrid').addEventListener('click',e=>{const b=e.target.closest('button.dot');if(!b||!ed)return;ed.sel=+b.dataset.i;renderEdit();$(ed.shots[ed.sel].img?'eInsp':'eCv').scrollIntoView({behavior:'smooth',block:'nearest'});});
 $('eBody').addEventListener('click',e=>{if(!ed)return;const nb=e.target.closest('button[data-nb]');

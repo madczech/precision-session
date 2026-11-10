@@ -48,6 +48,8 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .field textarea{font-family:var(--body);resize:vertical;min-height:38px}
 .row4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 @media (max-width:560px){.row4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.row5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+@media (max-width:560px){.row5{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .login{max-width:420px;margin:12vh auto 0;display:grid;gap:12px}
 .login input{font:500 18px var(--mono);padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
 .fbs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
