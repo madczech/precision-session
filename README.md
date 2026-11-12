@@ -11,7 +11,8 @@ Penalty Arena launcher accuracy log. Live at https://precision-session.vercel.ap
 - Or analyses a whole session video (Analyse video, or drop the video): it is read in this browser, nothing is uploaded.
   Every shot is found by the same method as the tested Python script: the goal is still, a ball launches, it is followed
   against the empty goal, and the impact frame is 3 frames before the net moves (or the last frame before the ball hits
-  the post). Pauses over 45 s split the video into sessions; each loads into the Session tab like screenshots, with the
+  the post). All shots of a video form one session (pauses between sectors stay in it); only a break of 5 min or more starts
+  a new session. Each session loads into the Session tab like screenshots, with the
   ball position from the video ("from video", unsure ones "check"). FB, PSI and cylinder mm are taken from the file
   name when it has them (e.g. `183mm-fb4-7psi.mp4`). MP4 / MOV with H.264 or HEVC; runs in a worker, so it keeps going
   when the window is in the background. About 4–5 minutes for 30 minutes of 1080p video.

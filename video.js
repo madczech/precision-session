@@ -123,7 +123,7 @@ async function analyseVideo(file,grid,progress,stop,dbg=null){const ix=await mp4
   await decodeAll(file,ix,vf=>{frame(vf);n++;const now=performance.now();if(now-last>250){last=now;progress(n,N,shots.length,(now-t0)/1000);}},stop,from,dbg?.to);
   if(stop())return null;
   const base=file.name.replace(/\.[^.]+$/,''),mmss=us=>{const s=Math.round(us/1e6);return`${String(Math.floor(s/60)).padStart(2,'0')}-${String(s%60).padStart(2,'0')}`;};
-  const sessions=[];shots.forEach((s,k)=>{if(!k||s.t-shots[k-1].t>45e6)sessions.push([]);sessions[sessions.length-1].push(s);});   // a pause over 45 s starts a new session
+  const sessions=[];shots.forEach((s,k)=>{if(!k||s.t-shots[k-1].t>300e6)sessions.push([]);sessions[sessions.length-1].push(s);});   // only a break of 5 min or more starts a new session (pauses between sectors stay in)
   for(const[si,list]of sessions.entries())for(const[k,s]of list.entries()){
     s.name=`${base}_S${si+1}-${String(k+1).padStart(2,'0')}_${mmss(s.t)}.jpg`;s.file=new File([await s.img],s.name,{type:'image/jpeg'});delete s.img;}
   return{sessions,W:ix.W,H:ix.H,frames:n,fps:ix.fps,seconds:(performance.now()-t0)/1000};}

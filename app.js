@@ -207,9 +207,9 @@ async function runVideo(file){if(vid?.run)return;const got=settingsFromName(file
   catch(e){vid=null;$('vidState').innerHTML=`<span style="color:var(--bad)">Could not analyse the video: ${esc(e&&e.message||e)}</span>`;$('vidSessions').innerHTML='';}
   render();}
 function showVideoSessions(from=''){const{file,res}=vid,ss=res.sessions,n=ss.reduce((a,s)=>a+s.length,0);
-  $('vidState').innerHTML=ss.length?`<b>${esc(file.name)}</b>: <b>${n}</b> shots in <b>${ss.length}</b> session${ss.length>1?'s':''} (read in ${Math.round(res.seconds)} s). Load a session to check it and save it, one at a time.${from}`:`No shots found in <b>${esc(file.name)}</b>.`;
+  $('vidState').innerHTML=ss.length?`<b>${esc(file.name)}</b>: <b>${n}</b> shots in <b>${ss.length}</b> session${ss.length>1?'s':''} (read in ${Math.round(res.seconds)} s). ${ss.length>1?'Load a session to check it and save it, one at a time.':'Load the shots to check them and save the session.'}${from}`:`No shots found in <b>${esc(file.name)}</b>.`;
   $('vidSessions').innerHTML=ss.map((s,k)=>{const c=s.filter(q=>q.check).length;
-    return`<button type="button" data-vs="${k}" aria-pressed="false">Session ${k+1} · ${s.length} shots · ${vTime(s[0].t)}–${vTime(s[s.length-1].t)}${c?` · ${c} to check`:''}</button>`;}).join('');
+    return`<button type="button" data-vs="${k}" aria-pressed="false">${ss.length>1?`Session ${k+1} · ${s.length} shots`:`Load all ${s.length} shots`} · ${vTime(s[0].t)}–${vTime(s[s.length-1].t)}${c?` · ${c} to check`:''}</button>`;}).join('');
   $('vidSessions').querySelectorAll('[data-vs]').forEach(b=>b.onclick=async()=>{if(!gate()){$('gateMsg').scrollIntoView({block:'center'});return;}
     const s=vid.res.sessions[+b.dataset.vs];await loadShots(s.map(q=>({file:q.file,video:{x:q.x,y:q.y,r:q.r,check:q.check}})));
     $('vidSessions').querySelectorAll('[data-vs]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});}
