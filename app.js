@@ -72,9 +72,9 @@ function dupsOf(list,same){const out=[];list.forEach((q,i)=>{for(let j=0;j<i;j++
 const expected=()=>cur.plan.length*cur.per;
 const planTarget=i=>cur.plan[Math.floor(i/cur.per)]??null;
 function shotRows(){const dup=dupsOf(cur.shots,(a,b)=>fpSame(a.fp,b.fp));return cur.shots.map((sh,i)=>{const r={i,shot:i+1,file:sh.name,target:sh.target,dup:dup[i]};
-  if(!sh.pos){r.flag=sh.manual?'excluded':'no ball';return r;}
+  if(!sh.pos){r.flag=sh.manual?'excluded':sh.missing?'missing':'no ball';return r;}
   const g=geo(G,sh.W,sh.H),[x,y]=apply(g.toCm,sh.pos.x,sh.pos.y);Object.assign(r,{x,y,sector:sectorOf(G,x,y),line:lineDist(G,x,y),px:sh.pos});
-  r.flag=sh.manual?'manual':sh.video?(sh.video.check?'check':r.line<G.bd?'borderline':'video'):(sh.auto.length>1?'multiple':(r.line<G.bd?'borderline':'ok'));
+  r.flag=sh.missing?'added':sh.manual?'manual':sh.video?(sh.video.check?'check':r.line<G.bd?'borderline':'video'):(sh.auto.length>1?'multiple':(r.line<G.bd?'borderline':'ok'));
   if(sh.target){const[tx,ty]=sectorCentre(G,sh.target);r.hit=r.sector===sh.target;r.miss=Math.hypot(x-tx,y-ty);}return r;});}
 function stats(rows){const t=rows.filter(r=>r.target&&r.sector!=null),per={};
   t.forEach(r=>{(per[r.target]??=[]).push(r)});const ps={};let spreads=[];
@@ -84,9 +84,11 @@ function stats(rows){const t=rows.filter(r=>r.target&&r.sector!=null),per={};
   return{balls:rows.filter(r=>r.sector!=null).length,aimed:t.length,hitRate:t.length?100*t.filter(r=>r.hit).length/t.length:null,
     meanMiss:t.length?t.reduce((q,r)=>q+r.miss,0)/t.length:null,spread:spreads.length?spreads.reduce((a,b)=>a+b,0)/spreads.length:null,perSector:ps};}
 const fmt=(v,d=0)=>v==null||isNaN(v)?'–':(+v).toFixed(d);
-const PILL={ok:'<span class="pill ok">ok</span>',manual:'<span class="pill">corrected</span>',excluded:'<span class="pill">excluded</span>',borderline:'<span class="pill warn">borderline</span>',multiple:'<span class="pill warn">2+ balls</span>','no ball':'<span class="pill bad">no ball</span>',video:'<span class="pill ok">from video</span>',check:'<span class="pill warn">check</span>'};
+const PILL={ok:'<span class="pill ok">ok</span>',manual:'<span class="pill">corrected</span>',excluded:'<span class="pill">excluded</span>',borderline:'<span class="pill warn">borderline</span>',multiple:'<span class="pill warn">2+ balls</span>','no ball':'<span class="pill bad">no ball</span>',video:'<span class="pill ok">from video</span>',check:'<span class="pill warn">check</span>',missing:'<span class="pill bad">missing</span>',added:'<span class="pill">added by hand</span>'};
 // sure = same screenshot (timestamp checked); otherwise only the stored ball positions are identical
 const dupPill=(j,sure)=>j==null?'':` <span class="pill ${sure?'bad':'warn'}">${sure?'duplicate of':'same as'} #${j+1}${sure?'':'?'}</span>`;
+// moves the nearest empty slot of a video session to just before this shot
+const gapBtn=i=>`<button type="button" data-gap="${i}" title="A shot is missing just before this one: move the nearest empty slot here" style="padding:2px 8px">Gap before</button>`;
 const delBtn=(i,n)=>`<button type="button" class="danger" data-del="${i}" title="Delete this shot (uploaded twice or not part of the session)" aria-label="Delete shot ${n}" style="padding:2px 8px">Delete</button>`;
 
 /* ---------- drawing ---------- */
@@ -107,11 +109,13 @@ function drawStage(){const cv=$('stageCv');if(!cur.base){const x=cv.getContext('
     x.fillStyle='#6b7a70';x.font='500 34px "IBM Plex Sans",sans-serif';x.textAlign='center';x.fillText('The stacked session image appears here',cv.width/2,cv.height/2);return;}
   composeClean(cv);const pts=cur.shots.map((sh,i)=>sh.pos?{n:i+1,x:sh.pos.x,y:sh.pos.y,hl:i===sel}:null).filter(Boolean);
   overlay(cv.getContext('2d'),G,cv.width,cv.height,pts,{grid:$('tGrid').checked,nums:$('tNums').checked,edit:$('tEdit').checked});}
-async function drawInspector(){const sh=cur.shots[sel];if(!sh)return;const cv=$('inspCv'),bmp=await createImageBitmap(sh.file);
-  cv.width=bmp.width;cv.height=bmp.height;const x=cv.getContext('2d');x.drawImage(bmp,0,0);bmp.close&&bmp.close();drawGrid(x,G,cv.width,cv.height,false);
+async function drawInspector(){const sh=cur.shots[sel];if(!sh)return;const cv=$('inspCv'),x=cv.getContext('2d');
+  if(sh.file){const bmp=await createImageBitmap(sh.file);cv.width=bmp.width;cv.height=bmp.height;x.drawImage(bmp,0,0);bmp.close&&bmp.close();}
+  else if(cur.base)composeClean(cv);   // a shot the video missed has no picture: place it on the stacked image
+  drawGrid(x,G,cv.width,cv.height,false);
   sh.auto.forEach(c=>{if(sh.pos&&c.x===sh.pos.x&&c.y===sh.pos.y)return;x.strokeStyle='rgba(255,255,255,.6)';x.setLineDash([8,6]);x.lineWidth=3;x.beginPath();x.arc(c.x,c.y,c.r+8,0,7);x.stroke();});
   x.setLineDash([]);if(sh.pos){x.strokeStyle='#ff3b30';x.lineWidth=5;x.beginPath();x.arc(sh.pos.x,sh.pos.y,sh.pos.r+8,0,7);x.stroke();}
-  const r=shotRows()[sel];$('inspTitle').textContent=`Shot ${sel+1} · target ${sh.target??'–'} · landed ${r.sector??'–'}`;}
+  const r=shotRows()[sel];$('inspTitle').textContent=`Shot ${sel+1} · target ${sh.target??'–'} · landed ${r.sector??'–'}`+(sh.file?'':' · not found in the video: click where the ball landed');}
 
 /* ---------- session UI ---------- */
 function renderPlan(){const b=$('planBoard');b.style.gridTemplateColumns=`repeat(${G.cols},minmax(0,1fr))`;b.innerHTML='';
@@ -141,23 +145,24 @@ function cardsHTML(sum,g,perSector,interactive){let h='';
 function perfectOf(s){const g=s.grid||G;return sectorSummary((s.shots||[]).map(q=>({n:q.n,target:q.target,sector:q.sector})),g,s.perSector||5).perfect;}
 function render(){
   drawStage();const rows=shotRows(),st=stats(rows),exp=expected();
+  const nMiss=cur.shots.filter(sh=>sh.missing&&!sh.pos&&!sh.manual).length;
   $('counter').innerHTML=`${cur.shots.length} <small>/ ${exp||'–'} shots</small>`;$('counter').classList.toggle('off',cur.shots.length>0&&cur.shots.length!==exp);
   const nDup=rows.filter(r=>r.dup!=null).length;
-  if(!busy)$('status').innerHTML=cur.shots.length?`<b>${st.balls}</b> balls in the air`+(rows.some(r=>r.flag==='no ball')?` · <b>${rows.filter(r=>r.flag==='no ball').length}</b> without ball`:'')+(rows.some(r=>r.flag==='check')?` · <b>${rows.filter(r=>r.flag==='check').length}</b> to check`:'')+(nDup?` · <span style="color:var(--bad)"><b>${nDup}</b> uploaded twice: delete ${nDup>1?'them':'it'} in the shot list</span>`:''):'';
+  if(!busy)$('status').innerHTML=cur.shots.length?`<b>${st.balls}</b> balls in the air`+(rows.some(r=>r.flag==='no ball')?` · <b>${rows.filter(r=>r.flag==='no ball').length}</b> without ball`:'')+(nMiss?` · <span style="color:var(--bad)"><b>${nMiss}</b> missing in the video: click ${nMiss>1?'them':'it'} in the shot list and place the ball (wrong slot? use Gap before)</span>`:'')+(rows.some(r=>r.flag==='check')?` · <b>${rows.filter(r=>r.flag==='check').length}</b> to check`:'')+(nDup?` · <span style="color:var(--bad)"><b>${nDup}</b> uploaded twice: delete ${nDup>1?'them':'it'} in the shot list</span>`:''):'';
   $('kHit').textContent=st.hitRate==null?'–':Math.round(st.hitRate)+'%';$('kMiss').textContent=fmt(st.meanMiss);$('kSpread').textContent=fmt(st.spread);
   const N=nSect(G),items=rows.map(r=>({n:r.shot,i:r.i,target:r.target,sector:r.sector??null})),sum=sectorSummary(items,G,cur.per);
   const sg=$('sgrid');sg.style.setProperty('--cols',G.cols);sg.innerHTML=cardsHTML(sum,G,st.perSector,true);
   $('kPerfect').textContent=cur.shots.length?`${sum.perfect}/${sum.aimed}`:'–';
   $('resStatus').textContent=cur.shots.length?`${sum.perfect} of ${sum.aimed} sectors with all ${cur.per} shots in`:'Load screenshots to see how each sector did.';
-  $('shotCount').textContent=cur.shots.length?`${cur.shots.length} shots`:'';
+  $('shotCount').textContent=cur.shots.length?`${cur.shots.length} shots`+(nMiss?` · ${nMiss} missing`:''):'';
   const tb=$('tbody');tb.innerHTML='';$('emptyMsg').hidden=cur.shots.length>0;
   const opt=t=>'<option value="">–</option>'+Array.from({length:N},(_,k)=>`<option${t===k+1?' selected':''}>${k+1}</option>`).join('');
   rows.forEach(r=>{const tr=document.createElement('tr');tr.className='row'+(r.i===sel?' sel':'');
     const pill=PILL[r.flag];
     const hit=r.target&&r.sector?(r.hit?' <span class="pill hit">hit</span>':' <span class="pill bad">miss</span>'):'';
     tr.innerHTML=`<td class="num">${r.shot}</td><td>${esc(r.file)}</td><td><select data-i="${r.i}" aria-label="Target sector">${opt(r.target)}</select></td><td><span class="sec">${r.sector??'–'}</span>${hit}</td>`+
-      `<td class="num">${r.sector?Math.round(r.x):''}</td><td class="num">${r.sector?Math.round(r.y):''}</td><td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${pill}${dupPill(r.dup,true)}</td><td>${delBtn(r.i,r.shot)}</td>`;
-    tr.onclick=e=>{if(e.target.tagName==='SELECT')return;if(e.target.closest('button[data-del]')){deleteShot(r.i);return;}openInspector(r.i)};tb.appendChild(tr);});
+      `<td class="num">${r.sector?Math.round(r.x):''}</td><td class="num">${r.sector?Math.round(r.y):''}</td><td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${pill}${dupPill(r.dup,true)}</td><td><div class="actions" style="flex-wrap:nowrap;gap:6px">${nMiss&&!cur.shots[r.i].missing?gapBtn(r.i):''}${delBtn(r.i,r.shot)}</div></td>`;
+    tr.onclick=e=>{if(e.target.tagName==='SELECT')return;if(e.target.closest('button[data-del]')){deleteShot(r.i);return;}if(e.target.closest('button[data-gap]')){moveGap(r.i);return;}openInspector(r.i)};tb.appendChild(tr);});
   tb.querySelectorAll('select').forEach(s=>s.onchange=e=>{const sh=cur.shots[+e.target.dataset.i];sh.target=e.target.value?+e.target.value:null;sh.targetManual=true;cur.dirty=true;render();});
   // save state
   const canSave=cur.shots.length>0&&cur.fireball&&+$('sPsi').value>0&&+$('sSpeed').value>0&&$('sCyl').value!==''&&$('sR1').value!==''&&$('sR2').value!==''&&!calMiss('s').length&&db&&!busy;$('saveBtn').disabled=!canSave||(cur.savedId&&!cur.dirty);
@@ -175,10 +180,14 @@ let undoS=null;
 async function deleteShot(i){if(busy||!cur.shots[i])return;const gone=cur.shots[i];
   undoS={shots:cur.shots.slice(),targets:cur.shots.map(sh=>sh.target),base:cur.base,sel,name:gone.name,n:i+1};
   cur.shots.splice(i,1);cur.shots.forEach((sh,k)=>{if(!sh.targetManual)sh.target=planTarget(k);});
-  if(i===0)await setBase(cur.shots[0]?.file);
+  if(gone.file&&!cur.shots.slice(0,i).some(sh=>sh.file))await setBase(cur.shots.find(sh=>sh.file)?.file);
   if(sel===i){sel=-1;$('inspector').hidden=true;}else if(sel>i)sel--;
   cur.dirty=true;render();if(sel>=0)drawInspector();
   $('delState').innerHTML=`Shot ${undoS.n} (${esc(undoS.name)}) deleted. <button type="button" id="undoDel" style="padding:2px 8px">Undo</button>`;$('undoDel').onclick=undoDelete;}
+// shots between the empty slot and shot i move one place; targets that follow the plan move with the plan
+function moveGap(i){if(busy)return;let j=-1;cur.shots.forEach((sh,k)=>{if(sh.missing&&!sh.pos&&!sh.manual&&(j<0||Math.abs(k-i)<Math.abs(j-i)))j=k;});if(j<0)return;
+  const keep=cur.shots[i],[gap]=cur.shots.splice(j,1);cur.shots.splice(j>i?i:i-1,0,gap);cur.shots.forEach((sh,k)=>{if(!sh.targetManual)sh.target=planTarget(k);});
+  if(sel>=0){const s=cur.shots.indexOf(keep);sel=sel===i?s:-1;$('inspector').hidden=sel<0;}cur.dirty=true;render();if(sel>=0)drawInspector();}
 function undoDelete(){if(!undoS||busy)return;cur.shots=undoS.shots;cur.shots.forEach((sh,k)=>sh.target=undoS.targets[k]);cur.base=undoS.base;sel=undoS.sel;
   $('inspector').hidden=sel<0;undoS=null;$('delState').textContent='';cur.dirty=true;render();if(sel>=0)drawInspector();}
 
@@ -209,25 +218,43 @@ async function runVideo(file){if(vid?.run)return;const got=settingsFromName(file
 function showVideoSessions(from=''){const{file,res}=vid,ss=res.sessions,n=ss.reduce((a,s)=>a+s.length,0);
   $('vidState').innerHTML=ss.length?`<b>${esc(file.name)}</b>: <b>${n}</b> shots in <b>${ss.length}</b> session${ss.length>1?'s':''} (read in ${Math.round(res.seconds)} s). ${ss.length>1?'Load a session to check it and save it, one at a time.':'Load the shots to check them and save the session.'}${from}`:`No shots found in <b>${esc(file.name)}</b>.`;
   $('vidSessions').innerHTML=ss.map((s,k)=>{const c=s.filter(q=>q.check).length;
-    return`<button type="button" data-vs="${k}" aria-pressed="false">${ss.length>1?`Session ${k+1} · ${s.length} shots`:`Load all ${s.length} shots`} · ${vTime(s[0].t)}–${vTime(s[s.length-1].t)}${c?` · ${c} to check`:''}</button>`;}).join('');
+    return`<button type="button" data-vs="${k}" aria-pressed="false">${ss.length>1?`Session ${k+1} · ${s.length} shots`:`Load all ${s.length} shots`} · ${vTime(s[0].t)}–${vTime(s[s.length-1].t)}${c?` · ${c} to check`:''}${s.length<expected()?` · ${expected()-s.length} missing`:''}</button>`;}).join('');
   $('vidSessions').querySelectorAll('[data-vs]').forEach(b=>b.onclick=async()=>{if(!gate()){$('gateMsg').scrollIntoView({block:'center'});return;}
-    const s=vid.res.sessions[+b.dataset.vs];await loadShots(s.map(q=>({file:q.file,video:{x:q.x,y:q.y,r:q.r,check:q.check}})));
+    const s=vid.res.sessions[+b.dataset.vs];await loadShots(withGaps(s.map(q=>({file:q.file,video:{x:q.x,y:q.y,r:q.r,check:q.check,t:q.t}})),vid.res.W,vid.res.H));
     $('vidSessions').querySelectorAll('[data-vs]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});}
+
+/* ---------- shots the video missed (someone in front of the camera...): the shot list keeps all planned slots ---------- */
+// places the found shots in order on the planned slots. The time between two found shots says how many were missed
+// (shots within a sector come at a steady interval, a new sector after a longer pause); the sector a shot landed in
+// settles what the clock cannot, e.g. whether the first shot of a sector or the last of the one before went missing
+function withGaps(items,W,H){const M=expected(),n=items.length;if(!n||n>=M)return items;
+  const g=geo(G,W,H),sec=items.map(it=>{const[x,y]=apply(g.toCm,it.video.x,it.video.y);return sectorOf(G,x,y);});
+  const dt=items.slice(1).map((it,k)=>it.video.t-items[k].video.t),srt=dt.slice().sort((a,b)=>a-b);
+  const d=srt[srt.length>>2]||1,big=srt.filter(v=>v>2.5*d),P=big.length?big[big.length>>1]:4*d;   // normal interval, typical pause between sectors
+  const step=(p,s,k)=>{let e=0,cross=0;for(let j=p;j<s;j++)if(planTarget(j+1)!==planTarget(j)){e+=P;cross++;}else e+=d;
+    return Math.min(3,Math.abs(dt[k-1]-e)/(.5*d+cross*.5*P));};
+  const miss=(k,s)=>sec[k]===planTarget(s)?0:1;
+  const f=items.map(()=>new Float64Array(M).fill(Infinity)),from=items.map(()=>new Int32Array(M).fill(-1));   // f[k][s]: best cost with item k on slot s
+  for(let s=0;s<=M-n;s++)f[0][s]=miss(0,s);
+  for(let k=1;k<n;k++)for(let s=k;s<=M-n+k;s++)for(let p=k-1;p<s;p++){const c=f[k-1][p]+miss(k,s)+step(p,s,k);if(c<f[k][s]){f[k][s]=c;from[k][s]=p;}}
+  let s=-1,best=Infinity;for(let q=n-1;q<M;q++)if(f[n-1][q]<best){best=f[n-1][q];s=q;}
+  const out=Array(M).fill(null);for(let k=n-1;k>=0;k--){out[s]=items[k];s=from[k][s];}
+  return out.map(it=>it||{missing:true});}
 
 /* ---------- loading ---------- */
 function loadFiles(list){const files=[...list].filter(f=>/^image\//.test(f.type)||/\.(png|jpe?g|webp)$/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
   return loadShots(files.map(f=>({file:f})));}
 // items: {file, video?:{x,y,r,check}} - video shots bring their ball position with them
 async function loadShots(items){if(busy||!gate())return;busy=true;sel=-1;$('inspector').hidden=true;
-  cur.shots=items.map((it,i)=>({file:it.file,name:it.file.name,video:it.video||null,target:planTarget(i),auto:[],pos:null,manual:false,crop:null}));cur.base=null;cur.savedId=null;cur.savedImg=null;cur.savedVer=null;cur.savedCreated=null;cur.dirty=true;
+  cur.shots=items.map((it,i)=>({file:it.file||null,name:it.file?.name||'',missing:!!it.missing,video:it.video||null,target:planTarget(i),auto:[],pos:null,manual:false,crop:null}));cur.base=null;cur.savedId=null;cur.savedImg=null;cur.savedVer=null;cur.savedCreated=null;cur.dirty=true;
   undoS=null;$('delState').textContent='';
   renderPlan();await analyseAll();}
 async function analyseAll(){busy=true;$('rerunBtn').disabled=true;
-  for(let i=0;i<cur.shots.length;i++){$('status').innerHTML=`Analysing <b>${i+1}</b> / ${cur.shots.length}…`;const sh=cur.shots[i],bmp=await createImageBitmap(sh.file);sh.W=bmp.width;sh.H=bmp.height;
-    if(i===0){const c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);cur.base={canvas:c,W:bmp.width,H:bmp.height};}
+  for(let i=0;i<cur.shots.length;i++){$('status').innerHTML=`Analysing <b>${i+1}</b> / ${cur.shots.length}…`;const sh=cur.shots[i];if(!sh.file)continue;const bmp=await createImageBitmap(sh.file);sh.W=bmp.width;sh.H=bmp.height;
+    if(!cur.base){const c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);cur.base={canvas:c,W:bmp.width,H:bmp.height};}
     sh.auto=sh.video?[{x:sh.video.x,y:sh.video.y,r:sh.video.r}]:detect(bmp);sh.fp=fingerprint(bmp,sh.auto);if(!sh.manual)sh.pos=sh.auto[0]||null;sh.crop=sh.pos?makeCrop(bmp,sh.pos):null;bmp.close&&bmp.close();
-    if(i%5===4||i===cur.shots.length-1){render();await new Promise(r=>setTimeout(r,0));}}
-  busy=false;$('rerunBtn').disabled=G.locked;cur.dirty=true;render();}
+    if(i%5===4){render();await new Promise(r=>setTimeout(r,0));}}
+  cur.shots.forEach(sh=>{if(!sh.file){sh.W=cur.base?.W;sh.H=cur.base?.H;}});busy=false;$('rerunBtn').disabled=G.locked;cur.dirty=true;render();}
 
 /* ---------- save session ---------- */
 const canvasBlob=(cv,q=.85)=>new Promise(r=>cv.toBlob(r,'image/jpeg',q));
@@ -388,12 +415,13 @@ async function setEditPos(i,pos,flag){const q=ed.shots[i];q.px=pos?{x:Math.round
 // match the screenshots to the stored shots by file name (or by order when the names differ), detect balls, cut the ball crops
 async function loadEditShots(list){if(!ed||ed.loading)return;const E=ed,s=E.src,W=s.W||1920,H=s.H||1080;
   const files=[...list].filter(f=>/^image\//.test(f.type)||/\.(png|jpe?g|webp)$/i.test(f.name)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
-  const byName=new Map(files.map(f=>[f.name,f]));let pick=E.shots.map(q=>byName.get(q.file)),note='';
-  if(pick.some(f=>!f)){if(files.length!==E.shots.length){$('eLoad').textContent=`Only ${pick.filter(Boolean).length} of ${E.shots.length} shots match a file name. Load the screenshots this session was made from.`;return;}pick=files;note=' File names differ, so they were matched in order.';}
+  // shots the video missed have no screenshot and are skipped
+  const real=E.shots.map((q,i)=>q.file?i:-1).filter(i=>i>=0),byName=new Map(files.map(f=>[f.name,f]));let pick=E.shots.map(q=>q.file?byName.get(q.file):null),note='';
+  if(real.some(i=>!pick[i])){if(files.length!==real.length){$('eLoad').textContent=`Only ${real.filter(i=>pick[i]).length} of ${real.length} shots match a file name. Load the screenshots this session was made from.`;return;}pick=E.shots.map(()=>null);real.forEach((i,k)=>pick[i]=files[k]);note=' File names differ, so they were matched in order.';}
   E.loading=true;editGate();const out=[];let base=null;
-  try{for(let i=0;i<pick.length;i++){$('eLoad').textContent=`Analysing ${i+1} / ${pick.length}…`;const q=E.shots[i],bmp=await createImageBitmap(pick[i]);
+  try{for(let i=0;i<pick.length;i++){$('eLoad').textContent=`Analysing ${i+1} / ${pick.length}…`;const q=E.shots[i];if(!pick[i]){out.push({});continue;}const bmp=await createImageBitmap(pick[i]);
       if(bmp.width!==W||bmp.height!==H){bmp.close&&bmp.close();throw new Error(`${pick[i].name} is ${bmp.width}×${bmp.height}, but the session was made from ${W}×${H} screenshots`);}
-      if(i===0){base=document.createElement('canvas');base.width=W;base.height=H;base.getContext('2d').drawImage(bmp,0,0);}
+      if(!base){base=document.createElement('canvas');base.width=W;base.height=H;base.getContext('2d').drawImage(bmp,0,0);}
       const auto=detect(bmp,{...G,...E.grid});let px=q.px&&{...q.px},crop=null;
       if(px){const near=auto.find(c=>Math.hypot(c.x-px.x,c.y-px.y)<c.r*1.5);px.r=near?near.r:(auto[0]?.r||W/85);crop=makeCrop(bmp,px);}
       const fp=fingerprint(bmp,auto);bmp.close&&bmp.close();out.push({img:pick[i],auto,px,crop,fp});if(ed!==E)return;}}
@@ -455,10 +483,10 @@ $('newBtn').onclick=()=>{if($('newBtn').dataset.armed!=='1'&&cur.shots.length&&c
   $('newBtn').dataset.armed='';$('newBtn').textContent='New session';Object.assign(cur,{fireball:null,plan:PLAN.slice(),shots:[],base:null,savedId:null,savedImg:null,savedVer:null,savedCreated:null,dirty:false});sel=-1;$('inspector').hidden=true;undoS=null;$('delState').textContent='';
   document.querySelectorAll('#fbs .fb').forEach(x=>x.setAttribute('aria-pressed','false'));$('sNotes').value='';$('sDate').value=new Date().toISOString().slice(0,10);renderPlan();render();scrollTo({top:0});};
 $('inspCv').addEventListener('click',async e=>{const sh=cur.shots[sel];if(!sh)return;const[x,y]=cvPt(e.target,e);const rs=cur.shots.filter(s=>s.pos).map(s=>s.pos.r).sort((a,b)=>a-b),r=rs.length?rs[rs.length>>1]:sh.W/85;
-  const near=sh.auto.find(c=>Math.hypot(c.x-x,c.y-y)<c.r*1.5);sh.pos=near?{...near}:{x,y,r};sh.manual=true;const bmp=await createImageBitmap(sh.file);sh.crop=makeCrop(bmp,sh.pos);bmp.close&&bmp.close();cur.dirty=true;render();drawInspector();});
+  const near=sh.auto.find(c=>Math.hypot(c.x-x,c.y-y)<c.r*1.5);sh.pos=near?{...near}:{x,y,r};sh.manual=true;sh.crop=null;if(sh.file){const bmp=await createImageBitmap(sh.file);sh.crop=makeCrop(bmp,sh.pos);bmp.close&&bmp.close();}cur.dirty=true;render();drawInspector();});
 $('delShotBtn').onclick=()=>{if(sel>=0)deleteShot(sel);};
 $('noBallBtn').onclick=()=>{const sh=cur.shots[sel];if(!sh)return;sh.pos=null;sh.crop=null;sh.manual=true;cur.dirty=true;render();drawInspector();};
-$('autoBtn').onclick=async()=>{const sh=cur.shots[sel];if(!sh)return;sh.manual=false;sh.pos=sh.auto[0]||null;if(sh.pos){const bmp=await createImageBitmap(sh.file);sh.crop=makeCrop(bmp,sh.pos);bmp.close&&bmp.close();}else sh.crop=null;cur.dirty=true;render();drawInspector();};
+$('autoBtn').onclick=async()=>{const sh=cur.shots[sel];if(!sh)return;sh.manual=false;sh.pos=sh.auto[0]||null;if(sh.pos&&sh.file){const bmp=await createImageBitmap(sh.file);sh.crop=makeCrop(bmp,sh.pos);bmp.close&&bmp.close();}else sh.crop=null;cur.dirty=true;render();drawInspector();};
 $('prevBtn').onclick=()=>{if(sel>0)openInspector(sel-1)};$('nextBtn').onclick=()=>{if(sel<cur.shots.length-1)openInspector(sel+1)};
 $('closeBtn').onclick=()=>{sel=-1;$('inspector').hidden=true;render();};
 addEventListener('keydown',e=>{if(sel<0||$('viewS').hidden||/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))return;if(e.key==='ArrowRight')$('nextBtn').click();if(e.key==='ArrowLeft')$('prevBtn').click();if(e.key==='Escape')$('closeBtn').click();});
@@ -477,7 +505,7 @@ $('eBody').addEventListener('click',e=>{if(!ed)return;const nb=e.target.closest(
   const tr=e.target.closest('tr[data-i]');if(tr&&e.target.tagName!=='SELECT'){ed.sel=+tr.dataset.i;renderEdit();}});
 $('eBody').addEventListener('change',e=>{if(!ed||e.target.tagName!=='SELECT')return;ed.shots[+e.target.dataset.i].target=e.target.value?+e.target.value:null;ed.dirty=true;renderEdit();});
 $('eCv').addEventListener('click',e=>{if(!ed||$('eGridEdit').checked)return;if(ed.sel<0){$('eHint').textContent='Pick a shot first: a dot in the sector cards or a row in the shot list.';return;}
-  const[x,y]=cvPt(e.target,e);setEditPos(ed.sel,{x,y},'manual');});
+  const[x,y]=cvPt(e.target,e);setEditPos(ed.sel,{x,y},ed.shots[ed.sel].file?'manual':'added');});
 $('eCancel').onclick=()=>{if(ed&&ed.dirty&&$('eCancel').dataset.armed!=='1'){$('eCancel').dataset.armed='1';$('eCancel').textContent='Discard changes?';setTimeout(()=>{$('eCancel').dataset.armed='';$('eCancel').textContent='Cancel';},4000);return;}closeEdit();};
 $('eSave').onclick=saveEdit;
 $('eDelete').onclick=async()=>{const E=ed;if(!E||E.saving||E.loading||!armDelete($('eDelete'),E.src,'Delete session'))return;
