@@ -125,7 +125,8 @@ function renderPlan(){const b=$('planBoard');b.style.gridTemplateColumns=`repeat
 function afterPlan(){cur.shots.forEach((sh,i)=>{if(!sh.targetManual)sh.target=planTarget(i);});cur.dirty=true;renderPlan();render();}
 // machine calibration, one value per sector A–E; p is the form prefix ('s' setup, 'e' editor)
 const CAL=['A','B','C','D','E'];
-const calMiss=p=>CAL.filter(k=>$(p+'Cal'+k).value===''),calOf=p=>Object.fromEntries(CAL.map(k=>[k,+$(p+'Cal'+k).value]));
+// machine settings as typed ("1000,250"), only shown, never used in the analysis
+const calMiss=p=>CAL.filter(k=>$(p+'Cal'+k).value.trim()===''),calOf=p=>Object.fromEntries(CAL.map(k=>[k,$(p+'Cal'+k).value.trim()]));
 function gate(){const miss=[];if(!cur.fireball)miss.push('fireball');if(!(+$('sPsi').value>0))miss.push('PSI');if(!(+$('sSpeed').value>0))miss.push('speed');if($('sCyl').value==='')miss.push('cylinder distance');if($('sR1').value==='')miss.push('R1');if($('sR2').value==='')miss.push('R2');if(calMiss('s').length)miss.push('calibration '+calMiss('s').join(', '));
   const ok=!miss.length;$('addBtn').disabled=!ok||busy;$('vidBtn').disabled=busy||!!vid?.run;$('gateMsg').textContent=ok?(cur.shots.length?'Loading new screenshots replaces the current ones.':''):`Fill in first: ${miss.join(', ')}.`;
   $('fbReq').hidden=!!cur.fireball;return ok;}
@@ -401,7 +402,15 @@ function composeEdit(cv){cv.width=ed.base.width;cv.height=ed.base.height;const x
 async function drawEdit(rows){const s=ed.src,cv=$('eCv'),im=ed.base?null:await loadImg(s.imageId);if(!ed||ed.src!==s)return;const x=cv.getContext('2d');
   if(ed.base)composeEdit(cv);else{cv.width=s.W||1920;cv.height=s.H||1080;if(im)x.drawImage(im,0,0,cv.width,cv.height);else noImage(x,cv);}
   overlay(x,ed.grid,cv.width,cv.height,rows.filter(r=>r.px).map(r=>({n:r.shot,x:r.px.x,y:r.px.y,hl:r.i===ed.sel})),{grid:true,nums:$('eNums').checked,edit:$('eGridEdit').checked,k:40});
+  drawCal(x,ed.grid,cv.width,cv.height);
   const p=rows[ed.sel]?.px;if(p){x.strokeStyle='#ffc400';x.lineWidth=4;x.beginPath();x.arc(p.x,p.y,cv.width/60,0,7);x.stroke();}}
+// A-D outside the goal corners (A top-left, B top-right, C bottom-left, D bottom-right), E in the middle
+function drawCal(ctx,g,W,H){const gg=geo(g,W,H),fs=Math.round(W/55),pad=fs*.4;
+  const at=[['A',0,g.gh,'left','bottom'],['B',g.gw,g.gh,'right','bottom'],['C',0,0,'left','top'],['D',g.gw,0,'right','top'],['E',g.gw/2,g.gh/2,'center','middle']];
+  ctx.save();ctx.font=`600 ${fs}px "IBM Plex Mono",monospace`;ctx.lineWidth=W/300;ctx.strokeStyle='rgba(0,0,0,.85)';ctx.fillStyle='#4da3ff';
+  for(const[k,cx,cy,al,bl]of at){const v=$('eCal'+k).value.trim();if(!v)continue;const[px,py]=apply(gg.toPx,cx,cy);
+    ctx.textAlign=al;ctx.textBaseline=bl;const y=bl==='bottom'?py-pad:bl==='top'?py+pad:py;ctx.strokeText(`${k} ${v}`,px,y);ctx.fillText(`${k} ${v}`,px,y);}
+  ctx.restore();}
 async function drawEditInsp(rows){const q=ed.shots[ed.sel];if(!q||!q.img)return;const tok=++eInspTok,bmp=await createImageBitmap(q.img);if(tok!==eInspTok||!ed){bmp.close&&bmp.close();return;}
   const cv=$('eInspCv');cv.width=bmp.width;cv.height=bmp.height;const x=cv.getContext('2d');x.drawImage(bmp,0,0);bmp.close&&bmp.close();drawGrid(x,ed.grid,cv.width,cv.height,false);
   (q.auto||[]).forEach(c=>{if(q.px&&Math.hypot(c.x-q.px.x,c.y-q.px.y)<2)return;x.strokeStyle='rgba(255,255,255,.6)';x.setLineDash([8,6]);x.lineWidth=3;x.beginPath();x.arc(c.x,c.y,c.r+8,0,7);x.stroke();});
@@ -496,7 +505,7 @@ addEventListener('hashchange',()=>showTab(location.hash.slice(1)));
 document.querySelectorAll('#fbFilter button').forEach(b=>b.onclick=()=>{filt=b.dataset.f;document.querySelectorAll('#fbFilter button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderHistory();});
 $('metric').onchange=()=>renderChart(shownSessions());$('cNums').onchange=renderCompare;
 document.querySelectorAll('#eFbs .fb').forEach(b=>b.onclick=()=>{if(!ed)return;ed.fireball=+b.dataset.fb;ed.dirty=true;editGate();});
-[...eMeta.map(([id])=>id),...CAL.map(k=>'eCal'+k)].forEach(id=>$(id).addEventListener('input',()=>{if(!ed)return;ed.dirty=true;editGate();}));
+[...eMeta.map(([id])=>id),...CAL.map(k=>'eCal'+k)].forEach(id=>$(id).addEventListener('input',()=>{if(!ed)return;ed.dirty=true;editGate();if(id.startsWith('eCal'))drawEdit(editRows());}));
 $('eNums').onchange=renderEdit;
 $('eSgrid').addEventListener('click',e=>{const b=e.target.closest('button.dot');if(!b||!ed)return;ed.sel=+b.dataset.i;renderEdit();$(ed.shots[ed.sel].img?'eInsp':'eCv').scrollIntoView({behavior:'smooth',block:'nearest'});});
 $('eBody').addEventListener('click',e=>{if(!ed)return;const nb=e.target.closest('button[data-nb]');
