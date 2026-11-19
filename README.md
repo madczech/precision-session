@@ -22,8 +22,9 @@ Penalty Arena launcher accuracy log. Live at https://precision-session.vercel.ap
   when the window is in the background. About 4–5 minutes for 30 minutes of 1080p video.
 - Saves sessions to shared History: trend by fireball, side-by-side compare, CSV/image export.
 - Shots uploaded twice are flagged: every screenshot carries the camera timestamp in the top-right picture-in-picture,
-  and two shots with the same timestamp are the same shot. Any shot can be deleted (shot list or the shot view) in the
-  Session tab and in the History editor; later shots move up and their targets follow the plan. Undo until saved.
+  and two shots with the same timestamp are the same shot. Deleting a shot (shot list or the shot view, Session tab
+  and History editor) removes its screenshot and ball but keeps the row, number and target, so another screenshot can be
+  uploaded there; rows are never removed. Undo until saved.
 - Saved sessions can be edited from History: setup values, notes, shot targets, ball positions (click the stored image)
   and "no ball". Stats are recalculated with the grid the session was saved with; that grid can also be adjusted
   (drag its corners or take the shared grid), which re-measures every shot. Screenshots are not stored; loading the

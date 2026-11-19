@@ -90,7 +90,7 @@ const dupPill=(j,sure)=>j==null?'':` <span class="pill ${sure?'bad':'warn'}">${s
 // moves the nearest empty slot of a video session to just before this shot
 const gapBtn=i=>`<button type="button" data-gap="${i}" title="A shot is missing just before this one: move the nearest empty slot here" style="padding:2px 8px">Gap before</button>`;
 const upBtn=i=>`<button type="button" data-up="${i}" title="Add the screenshot of this shot (taken from the video by hand)" style="padding:2px 8px">Upload</button>`;
-const delBtn=(i,n)=>`<button type="button" class="danger" data-del="${i}" title="Delete this shot (uploaded twice or not part of the session)" aria-label="Delete shot ${n}" style="padding:2px 8px">Delete</button>`;
+const delBtn=(i,n)=>`<button type="button" class="danger" data-del="${i}" title="Delete this screenshot; the row stays so another one can be uploaded" aria-label="Delete shot ${n}" style="padding:2px 8px">Delete</button>`;
 
 /* ---------- drawing ---------- */
 function drawGrid(ctx,g,W,H,handles){const gg=geo(g,W,H),cw=g.gw/g.cols,rh=g.gh/g.rows,lw=Math.max(2,W/700);
@@ -163,7 +163,7 @@ function render(){
     const pill=PILL[r.flag];
     const hit=r.target&&r.sector?(r.hit?' <span class="pill hit">hit</span>':' <span class="pill bad">miss</span>'):'';
     tr.innerHTML=`<td class="num">${r.shot}</td><td>${esc(r.file)}</td><td><select data-i="${r.i}" aria-label="Target sector">${opt(r.target)}</select></td><td><span class="sec">${r.sector??'–'}</span>${hit}</td>`+
-      `<td class="num">${r.sector?Math.round(r.x):''}</td><td class="num">${r.sector?Math.round(r.y):''}</td><td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${pill}${dupPill(r.dup,true)}${cur.shots[r.i].upErr?`<div style="color:var(--bad);font-size:13px;margin-top:4px">${esc(cur.shots[r.i].upErr)}</div>`:''}</td><td><div class="actions" style="flex-wrap:nowrap;gap:6px">${nMiss&&!cur.shots[r.i].missing?gapBtn(r.i):''}${cur.shots[r.i].file?'':upBtn(r.i)}${delBtn(r.i,r.shot)}</div></td>`;
+      `<td class="num">${r.sector?Math.round(r.x):''}</td><td class="num">${r.sector?Math.round(r.y):''}</td><td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${pill}${dupPill(r.dup,true)}${cur.shots[r.i].upErr?`<div style="color:var(--bad);font-size:13px;margin-top:4px">${esc(cur.shots[r.i].upErr)}</div>`:''}</td><td><div class="actions" style="flex-wrap:nowrap;gap:6px">${nMiss&&!cur.shots[r.i].missing?gapBtn(r.i):''}${cur.shots[r.i].file?'':upBtn(r.i)}${cur.shots[r.i].file||cur.shots[r.i].pos?delBtn(r.i,r.shot):''}</div></td>`;
     tr.onclick=e=>{if(e.target.tagName==='SELECT')return;if(e.target.closest('button[data-del]')){deleteShot(r.i);return;}if(e.target.closest('button[data-gap]')){moveGap(r.i);return;}if(e.target.closest('button[data-up]')){pickOne(r.i);return;}openInspector(r.i)};tb.appendChild(tr);});
   tb.querySelectorAll('select').forEach(s=>s.onchange=e=>{const sh=cur.shots[+e.target.dataset.i];sh.target=e.target.value?+e.target.value:null;sh.targetManual=true;cur.dirty=true;render();});
   // save state
@@ -178,20 +178,20 @@ function openInspector(i){sel=i;$('inspector').hidden=false;render();drawInspect
 // the stacked image is drawn on the first screenshot, so it is rebuilt when that shot goes
 async function setBase(file){if(!file){cur.base=null;return;}const bmp=await createImageBitmap(file),c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);bmp.close&&bmp.close();cur.base={canvas:c,W:c.width,H:c.height};}
 let undoS=null;
-// later shots move up one place; targets that still follow the plan move with the plan, hand-set ones stay
-async function deleteShot(i){if(busy||!cur.shots[i])return;const gone=cur.shots[i];
-  undoS={shots:cur.shots.slice(),targets:cur.shots.map(sh=>sh.target),base:cur.base,sel,name:gone.name,n:i+1};
-  cur.shots.splice(i,1);cur.shots.forEach((sh,k)=>{if(!sh.targetManual)sh.target=planTarget(k);});
-  if(gone.file&&!cur.shots.slice(0,i).some(sh=>sh.file))await setBase(cur.shots.find(sh=>sh.file)?.file);
-  if(sel===i){sel=-1;$('inspector').hidden=true;}else if(sel>i)sel--;
-  cur.dirty=true;render();if(sel>=0)drawInspector();
-  $('delState').innerHTML=`Shot ${undoS.n} (${esc(undoS.name)}) deleted. <button type="button" id="undoDel" style="padding:2px 8px">Undo</button>`;$('undoDel').onclick=undoDelete;}
+// the row stays (shot number and target too) and becomes an empty slot that can get another screenshot
+async function deleteShot(i){const sh=cur.shots[i];if(busy||!sh||!(sh.file||sh.pos))return;
+  undoS={sh,prev:{...sh},base:cur.base,name:sh.name,n:i+1};
+  const wasBase=sh.file&&sh.file===cur.shots.find(q=>q.file)?.file;
+  Object.assign(sh,{file:null,name:'',missing:true,manual:false,video:null,auto:[],pos:null,crop:null,fp:null,upErr:null});
+  if(wasBase)await setBase(cur.shots.find(q=>q.file)?.file);   // the stacked image is drawn on the first screenshot
+  cur.dirty=true;render();if(sel===i)drawInspector();
+  $('delState').innerHTML=`Shot ${undoS.n}${undoS.name?` (${esc(undoS.name)})`:''} deleted: upload another screenshot in its row. <button type="button" id="undoDel" style="padding:2px 8px">Undo</button>`;$('undoDel').onclick=undoDelete;}
 // shots between the empty slot and shot i move one place; targets that follow the plan move with the plan
 function moveGap(i){if(busy)return;let j=-1;cur.shots.forEach((sh,k)=>{if(sh.missing&&!sh.pos&&!sh.manual&&(j<0||Math.abs(k-i)<Math.abs(j-i)))j=k;});if(j<0)return;
   const keep=cur.shots[i],[gap]=cur.shots.splice(j,1);cur.shots.splice(j>i?i:i-1,0,gap);cur.shots.forEach((sh,k)=>{if(!sh.targetManual)sh.target=planTarget(k);});
   if(sel>=0){const s=cur.shots.indexOf(keep);sel=sel===i?s:-1;$('inspector').hidden=sel<0;}cur.dirty=true;render();if(sel>=0)drawInspector();}
-function undoDelete(){if(!undoS||busy)return;cur.shots=undoS.shots;cur.shots.forEach((sh,k)=>sh.target=undoS.targets[k]);cur.base=undoS.base;sel=undoS.sel;
-  $('inspector').hidden=sel<0;undoS=null;$('delState').textContent='';cur.dirty=true;render();if(sel>=0)drawInspector();}
+function undoDelete(){if(!undoS||busy)return;Object.assign(undoS.sh,undoS.prev);cur.base=undoS.base;
+  undoS=null;$('delState').textContent='';cur.dirty=true;render();if(sel>=0)drawInspector();}
 
 /* ---------- video (analysed in this browser, see video.js) ---------- */
 const isVideo=f=>/^video\//.test(f.type)||/\.(mp4|mov|m4v)$/i.test(f.name);
@@ -405,7 +405,7 @@ function renderEdit(){if(!ed)return;const s=ed.src,g=ed.grid,rows=editRows(),st=
   const opt=t=>'<option value="">–</option>'+Array.from({length:N},(_,k)=>`<option${t===k+1?' selected':''}>${k+1}</option>`).join('');
   $('eBody').innerHTML=rows.map(r=>{const hit=r.target&&r.sector?(r.hit?' <span class="pill hit">hit</span>':' <span class="pill bad">miss</span>'):'';
     return `<tr class="row${r.i===ed.sel?' sel':''}" data-i="${r.i}"><td class="num">${r.shot}</td><td>${esc(r.file)}</td><td><select data-i="${r.i}" aria-label="Target sector">${opt(r.target)}</select></td><td><span class="sec">${r.sector??'–'}</span>${hit}</td>`+
-      `<td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${PILL[r.flag]||''}${dupPill(r.dup,r.dupSure)}</td><td><div class="actions" style="flex-wrap:nowrap;gap:6px">${r.px?`<button type="button" data-nb="${r.i}" style="padding:2px 8px">No ball</button>`:''}${delBtn(r.i,r.shot)}</div></td></tr>`;}).join('');
+      `<td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${PILL[r.flag]||''}${dupPill(r.dup,r.dupSure)}</td><td><div class="actions" style="flex-wrap:nowrap;gap:6px">${r.px?`<button type="button" data-nb="${r.i}" style="padding:2px 8px">No ball</button>`:''}${ed.shots[r.i].file||r.px?delBtn(r.i,r.shot):''}</div></td></tr>`;}).join('');
   const nDup=rows.filter(r=>r.dup!=null).length;
   $('eDupState').innerHTML=nDup?`<span style="color:${rows[0].dupSure?'var(--bad)':'var(--warn)'}">${rows[0].dupSure?`${nDup} shot${nDup>1?'s were':' was'} uploaded twice (same camera timestamp).`:`${nDup} shot${nDup>1?'s have':' has'} exactly the same ball position as an earlier one: probably uploaded twice. Load the screenshots to be sure.`} Delete ${nDup>1?'them':'it'} in the shot list.</span>`:'';
   $('eGridReset').disabled=!ed.gridChanged;
@@ -452,18 +452,17 @@ async function loadEditShots(list){if(!ed||ed.loading)return;const E=ed,s=E.src,
   catch(e){E.loading=false;if(ed===E){$('eLoad').innerHTML=`<span style="color:var(--bad)">${esc(e.message)}</span>`;editGate();}return;}
   if(ed!==E)return;out.forEach((o,i)=>Object.assign(E.shots[i],o));E.base=base;E.loading=false;
   $('eLoad').textContent=`Screenshots loaded.${note} Pick a shot to check it on its own screenshot; saving rebuilds the session image.`;renderEdit();}
-// same as deleteShot in the Session tab; nothing is stored until Save, Cancel brings everything back
-async function deleteEditShot(i){const E=ed;if(!E||E.loading||E.saving||!E.shots[i])return;
-  const plan=E.src.plan||PLAN,per=E.src.perSector||5,pt=k=>plan[Math.floor(k/per)]??null,gone=E.shots[i];
-  E.undo={shots:E.shots.slice(),targets:E.shots.map(q=>q.target),ns:E.shots.map(q=>q.n),base:E.base,sel:E.sel,name:gone.file||'',n:gone.n??i+1};
-  E.shots.splice(i,1);E.shots.forEach((q,k)=>{if(q.target===pt(k<i?k:k+1))q.target=pt(k);q.n=k+1;});
-  if(i===0&&E.base){const f=E.shots[0]?.img;if(f){const bmp=await createImageBitmap(f),c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);bmp.close&&bmp.close();E.base=c;}}
-  if(ed!==E)return;
-  if(E.sel===i)E.sel=-1;else if(E.sel>i)E.sel--;E.dirty=true;
-  $('eDelState').innerHTML=`Shot ${E.undo.n}${E.undo.name?` (${esc(E.undo.name)})`:''} deleted.${E.base?'':' Its ball stays visible in the stored image until the screenshots are loaded again.'} <button type="button" id="eUndoDel" style="padding:2px 8px">Undo</button>`;
+// same as deleteShot in the Session tab: the row stays as an empty slot; nothing is stored until Save, Cancel brings everything back
+async function deleteEditShot(i){const E=ed,q=E&&E.shots[i];if(!E||E.loading||E.saving||!q||!(q.file||q.px))return;
+  E.undo={q,prev:{...q},base:E.base,name:q.file||'',n:q.n??i+1};
+  const wasBase=q.img&&q.img===E.shots.find(o=>o.img)?.img;
+  Object.assign(q,{file:'',img:null,auto:null,fp:null,px:null,crop:null,moved:true,flag:'missing',x:null,y:null,sector:null,miss:null});
+  if(wasBase){const f=E.shots.find(o=>o.img)?.img;if(f){const bmp=await createImageBitmap(f),c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);bmp.close&&bmp.close();E.base=c;}}
+  if(ed!==E)return;E.dirty=true;
+  $('eDelState').innerHTML=`Shot ${E.undo.n}${E.undo.name?` (${esc(E.undo.name)})`:''} deleted: the row stays empty.${E.base?'':' Its ball stays visible in the stored image until the screenshots are loaded again.'} <button type="button" id="eUndoDel" style="padding:2px 8px">Undo</button>`;
   $('eUndoDel').onclick=undoEditDelete;renderEdit();}
 function undoEditDelete(){const E=ed;if(!E||!E.undo||E.loading||E.saving)return;const u=E.undo;
-  E.shots=u.shots;E.shots.forEach((q,k)=>{q.target=u.targets[k];q.n=u.ns[k];});E.base=u.base;E.sel=u.sel;E.undo=null;E.dirty=true;$('eDelState').textContent='';renderEdit();}
+  Object.assign(u.q,u.prev);E.base=u.base;E.undo=null;E.dirty=true;$('eDelState').textContent='';renderEdit();}
 async function saveEdit(){if(!ed||!db||!editGate())return;ed.saving=true;editGate();$('eState').textContent='Saving…';
   const s=ed.src,g=ed.grid,rows=editRows(),st=stats(rows),{_id,...base}=s;let imageId=s.imageId;
   if(ed.base){try{imageId=(await assets.upload(await canvasBlob(composeEdit(document.createElement('canvas'))))).id;}
