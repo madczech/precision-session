@@ -203,7 +203,7 @@ function settingsFromName(n){const got=[],fb=/fb\s*([245])(?!\d)/i.exec(n),psi=/
   if(cyl&&!$('sCyl').value){$('sCyl').value=cyl[1].replace(',','.');got.push('cyl '+cyl[1]+' mm');}
   return got;}
 // the analysis runs in a worker; Stop ends it at once
-function inWorker(file,grid,progress,stop){return new Promise((ok,fail)=>{const w=new Worker('/video.js');
+function inWorker(file,grid,progress,stop){return new Promise((ok,fail)=>{const w=new Worker('/video.js?v=__V__');
   const t=setInterval(()=>{if(stop()){clearInterval(t);w.terminate();ok(null);}},200);
   w.onmessage=e=>{const d=e.data;if(d.progress)progress(...d.progress);else{clearInterval(t);w.terminate();d.error?fail(new Error(d.error)):ok(d.done);}};
   w.onerror=e=>{clearInterval(t);w.terminate();fail(new Error(e.message||'The video analysis stopped unexpectedly.'));};
