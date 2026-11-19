@@ -163,8 +163,8 @@ function render(){
     const pill=PILL[r.flag];
     const hit=r.target&&r.sector?(r.hit?' <span class="pill hit">hit</span>':' <span class="pill bad">miss</span>'):'';
     tr.innerHTML=`<td class="num">${r.shot}</td><td>${esc(r.file)}</td><td><select data-i="${r.i}" aria-label="Target sector">${opt(r.target)}</select></td><td><span class="sec">${r.sector??'–'}</span>${hit}</td>`+
-      `<td class="num">${r.sector?Math.round(r.x):''}</td><td class="num">${r.sector?Math.round(r.y):''}</td><td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${pill}${dupPill(r.dup,true)}</td><td><div class="actions" style="flex-wrap:nowrap;gap:6px">${nMiss&&!cur.shots[r.i].missing?gapBtn(r.i):''}${cur.shots[r.i].file?'':upBtn(r.i)}${delBtn(r.i,r.shot)}</div></td>`;
-    tr.onclick=e=>{if(e.target.tagName==='SELECT')return;if(e.target.closest('button[data-del]')){deleteShot(r.i);return;}if(e.target.closest('button[data-gap]')){moveGap(r.i);return;}if(e.target.closest('button[data-up]')){pickOne(r.i,false);return;}openInspector(r.i)};tb.appendChild(tr);});
+      `<td class="num">${r.sector?Math.round(r.x):''}</td><td class="num">${r.sector?Math.round(r.y):''}</td><td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${pill}${dupPill(r.dup,true)}${cur.shots[r.i].upErr?`<div style="color:var(--bad);font-size:13px;margin-top:4px">${esc(cur.shots[r.i].upErr)}</div>`:''}</td><td><div class="actions" style="flex-wrap:nowrap;gap:6px">${nMiss&&!cur.shots[r.i].missing?gapBtn(r.i):''}${cur.shots[r.i].file?'':upBtn(r.i)}${delBtn(r.i,r.shot)}</div></td>`;
+    tr.onclick=e=>{if(e.target.tagName==='SELECT')return;if(e.target.closest('button[data-del]')){deleteShot(r.i);return;}if(e.target.closest('button[data-gap]')){moveGap(r.i);return;}if(e.target.closest('button[data-up]')){pickOne(r.i);return;}openInspector(r.i)};tb.appendChild(tr);});
   tb.querySelectorAll('select').forEach(s=>s.onchange=e=>{const sh=cur.shots[+e.target.dataset.i];sh.target=e.target.value?+e.target.value:null;sh.targetManual=true;cur.dirty=true;render();});
   // save state
   const canSave=cur.shots.length>0&&cur.fireball&&+$('sPsi').value>0&&+$('sSpeed').value>0&&$('sCyl').value!==''&&$('sR1').value!==''&&$('sR2').value!==''&&!calMiss('s').length&&db&&!busy;$('saveBtn').disabled=!canSave||(cur.savedId&&!cur.dirty);
@@ -260,21 +260,16 @@ async function analyseAll(){busy=true;$('rerunBtn').disabled=true;
 
 /* ---------- one screenshot for a shot the video missed (taken from the video by hand) ---------- */
 let oneFor=null;
-function pickOne(i,edit){oneFor={i,edit,ed};$('oneIn').click();}
-async function uploadOne(file){const o=oneFor;oneFor=null;if(!o)return;if(o.edit)return uploadEditOne(o,file);
-  const sh=cur.shots[o.i];if(busy||!sh||sh.file)return;const bmp=await createImageBitmap(file);
-  if(cur.base&&(bmp.width!==cur.base.W||bmp.height!==cur.base.H)){bmp.close&&bmp.close();$('delState').innerHTML=`<span style="color:var(--bad)">${esc(file.name)} is ${bmp.width}×${bmp.height}, but the session screenshots are ${cur.base.W}×${cur.base.H}.</span>`;return;}
+function pickOne(i){oneFor=cur.shots[i];$('oneIn').click();}
+// a frame grabbed by hand is often another size (e.g. a Retina screenshot): same proportions are scaled to the session size
+async function uploadOne(file){const sh=oneFor;oneFor=null;if(busy||!sh||sh.file||!cur.shots.includes(sh))return;let bmp=await createImageBitmap(file);
+  if(cur.base&&(bmp.width!==cur.base.W||bmp.height!==cur.base.H)){const{W,H}=cur.base;
+    if(Math.abs(bmp.width/bmp.height-W/H)>.01){sh.upErr=`${file.name} is ${bmp.width}×${bmp.height}, not the shape of the video (${W}×${H}). Grab the whole frame without cropping.`;bmp.close&&bmp.close();render();return;}
+    const c=document.createElement('canvas');c.width=W;c.height=H;c.getContext('2d').drawImage(bmp,0,0,W,H);bmp.close&&bmp.close();
+    file=new File([await canvasBlob(c,.92)],file.name.replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'});bmp=await createImageBitmap(file);}
   if(!cur.base){const c=document.createElement('canvas');c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);cur.base={canvas:c,W:bmp.width,H:bmp.height};}
-  Object.assign(sh,{file,name:file.name,missing:false,manual:false,video:null,W:bmp.width,H:bmp.height});sh.auto=detect(bmp);sh.fp=fingerprint(bmp,sh.auto);sh.pos=sh.auto[0]||null;sh.crop=sh.pos?makeCrop(bmp,sh.pos):null;bmp.close&&bmp.close();
-  $('delState').textContent=`Shot ${o.i+1}: ${file.name} added.`;cur.dirty=true;render();if(sel===o.i)drawInspector();}
-// History: the screenshots are not stored, so the new ball is added onto the saved session image (or the loaded screenshots)
-async function uploadEditOne(o,file){const E=o.ed;if(!E||ed!==E||E.loading||E.saving)return;const q=E.shots[o.i],s=E.src,W=s.W||1920,H=s.H||1080;if(!q||q.file)return;
-  const bmp=await createImageBitmap(file);
-  if(bmp.width!==W||bmp.height!==H){bmp.close&&bmp.close();$('eDelState').innerHTML=`<span style="color:var(--bad)">${esc(file.name)} is ${bmp.width}×${bmp.height}, but the session was made from ${W}×${H} screenshots.</span>`;return;}
-  if(!E.base){const im=await loadImg(s.imageId),c=document.createElement('canvas');c.width=W;c.height=H;c.getContext('2d').drawImage(im||bmp,0,0,W,H);if(ed!==E){bmp.close&&bmp.close();return;}E.base=c;}
-  const auto=detect(bmp,{...G,...E.grid}),px=auto[0]?{x:Math.round(auto[0].x),y:Math.round(auto[0].y),r:auto[0].r}:null;
-  Object.assign(q,{img:file,file:file.name,auto,px,crop:px?makeCrop(bmp,px):null,fp:fingerprint(bmp,auto),moved:true,flag:auto.length>1?'multiple':auto.length?'ok':'no ball',x:null,y:null,sector:null,miss:null});bmp.close&&bmp.close();
-  E.dirty=true;$('eDelState').textContent=`Shot ${q.n??o.i+1}: ${file.name} added. Saving adds its ball to the session image.`;renderEdit();}
+  Object.assign(sh,{file,name:file.name,missing:false,manual:false,video:null,upErr:null,W:bmp.width,H:bmp.height});sh.auto=detect(bmp);sh.fp=fingerprint(bmp,sh.auto);sh.pos=sh.auto[0]||null;sh.crop=sh.pos?makeCrop(bmp,sh.pos):null;bmp.close&&bmp.close();
+  cur.dirty=true;render();const i=cur.shots.indexOf(sh);if(sel===i)drawInspector();}
 
 /* ---------- save session ---------- */
 const canvasBlob=(cv,q=.85)=>new Promise(r=>cv.toBlob(r,'image/jpeg',q));
@@ -410,7 +405,7 @@ function renderEdit(){if(!ed)return;const s=ed.src,g=ed.grid,rows=editRows(),st=
   const opt=t=>'<option value="">–</option>'+Array.from({length:N},(_,k)=>`<option${t===k+1?' selected':''}>${k+1}</option>`).join('');
   $('eBody').innerHTML=rows.map(r=>{const hit=r.target&&r.sector?(r.hit?' <span class="pill hit">hit</span>':' <span class="pill bad">miss</span>'):'';
     return `<tr class="row${r.i===ed.sel?' sel':''}" data-i="${r.i}"><td class="num">${r.shot}</td><td>${esc(r.file)}</td><td><select data-i="${r.i}" aria-label="Target sector">${opt(r.target)}</select></td><td><span class="sec">${r.sector??'–'}</span>${hit}</td>`+
-      `<td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${PILL[r.flag]||''}${dupPill(r.dup,r.dupSure)}</td><td><div class="actions" style="flex-wrap:nowrap;gap:6px">${r.px?`<button type="button" data-nb="${r.i}" style="padding:2px 8px">No ball</button>`:''}${ed.shots[r.i].file?'':upBtn(r.i)}${delBtn(r.i,r.shot)}</div></td></tr>`;}).join('');
+      `<td class="num">${r.miss!=null?Math.round(r.miss):''}</td><td>${PILL[r.flag]||''}${dupPill(r.dup,r.dupSure)}</td><td><div class="actions" style="flex-wrap:nowrap;gap:6px">${r.px?`<button type="button" data-nb="${r.i}" style="padding:2px 8px">No ball</button>`:''}${delBtn(r.i,r.shot)}</div></td></tr>`;}).join('');
   const nDup=rows.filter(r=>r.dup!=null).length;
   $('eDupState').innerHTML=nDup?`<span style="color:${rows[0].dupSure?'var(--bad)':'var(--warn)'}">${rows[0].dupSure?`${nDup} shot${nDup>1?'s were':' was'} uploaded twice (same camera timestamp).`:`${nDup} shot${nDup>1?'s have':' has'} exactly the same ball position as an earlier one: probably uploaded twice. Load the screenshots to be sure.`} Delete ${nDup>1?'them':'it'} in the shot list.</span>`:'';
   $('eGridReset').disabled=!ed.gridChanged;
@@ -530,7 +525,6 @@ $('eSgrid').addEventListener('click',e=>{const b=e.target.closest('button.dot');
 $('eBody').addEventListener('click',e=>{if(!ed)return;const nb=e.target.closest('button[data-nb]');
   if(nb){setEditPos(+nb.dataset.nb,null,'excluded');return;}
   const delB=e.target.closest('button[data-del]');if(delB){deleteEditShot(+delB.dataset.del);return;}
-  const upB=e.target.closest('button[data-up]');if(upB){pickOne(+upB.dataset.up,true);return;}
   const tr=e.target.closest('tr[data-i]');if(tr&&e.target.tagName!=='SELECT'){ed.sel=+tr.dataset.i;renderEdit();}});
 $('eBody').addEventListener('change',e=>{if(!ed||e.target.tagName!=='SELECT')return;ed.shots[+e.target.dataset.i].target=e.target.value?+e.target.value:null;ed.dirty=true;renderEdit();});
 $('eCv').addEventListener('click',e=>{if(!ed||$('eGridEdit').checked)return;if(ed.sel<0){$('eHint').textContent='Pick a shot first: a dot in the sector cards or a row in the shot list.';return;}
