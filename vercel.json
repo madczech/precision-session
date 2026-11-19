@@ -1,5 +1,6 @@
 {
-  "buildCommand": "sed -i \"s/__V__/${VERCEL_GIT_COMMIT_SHA:-dev}/g\" index.html app.js",
+  "buildCommand": "rm -rf public && mkdir public && cp -r index.html app.js style.css video.js docs public/ && sed -i \"s/__V__/${VERCEL_GIT_COMMIT_SHA:-dev}/g\" public/index.html public/app.js",
+  "outputDirectory": "public",
   "headers": [
     {
       "source": "/((?!api/).*)",
