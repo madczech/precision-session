@@ -597,3 +597,14 @@ function boot(){if(booted){refreshSessions();return;}booted=true;db=dbShim;asset
   render();}
 $('tabH').addEventListener('click',()=>{if(booted)refreshSessions();});
 (async()=>{if(pass&&await tryLogin(pass))boot();else showLogin('');})();
+/* ---------- help tips: hover or focus a ? to read it, tap it on a phone ---------- */
+(()=>{const box=document.createElement('div');box.id='tipBox';box.hidden=true;box.setAttribute('role','tooltip');document.body.appendChild(box);let on=null;
+  document.querySelectorAll('.tip').forEach(t=>{t.tabIndex=0;t.setAttribute('role','button');t.setAttribute('aria-label','Help: '+t.dataset.tip);});
+  const show=t=>{on=t;box.textContent=t.dataset.tip;box.hidden=false;const r=t.getBoundingClientRect(),b=box.getBoundingClientRect();
+    box.style.left=Math.max(16,Math.min(innerWidth-16-b.width,r.left+r.width/2-b.width/2))+'px';box.style.top=(r.bottom+8+b.height>innerHeight?r.top-8-b.height:r.bottom+8)+'px';};
+  const hide=()=>{on=null;box.hidden=true;};
+  document.addEventListener('mouseover',e=>{const t=e.target.closest('.tip');if(t)show(t);else if(on&&e.pointerType!=='touch'&&!matchMedia('(hover:none)').matches)hide();});
+  document.addEventListener('focusin',e=>{const t=e.target.closest('.tip');t?show(t):hide();});
+  // a ? inside a label or summary must not focus the input or fold the section
+  document.addEventListener('click',e=>{const t=e.target.closest('.tip');if(!t){if(on)hide();return;}e.preventDefault();on===t&&box.hidden===false&&matchMedia('(hover:none)').matches?hide():show(t);});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')hide();});addEventListener('scroll',hide,true);})();

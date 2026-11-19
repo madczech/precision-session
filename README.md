@@ -31,6 +31,8 @@ Penalty Arena launcher accuracy log. Live at https://precision-session.vercel.ap
   original screenshots into the editor again gives the full per-shot check (Auto / No ball / click the ball) and the
   session image is rebuilt on save.
 - Saving is refused (and says so) if someone else saved the same session in between.
+- A small ? next to each setting, result and column explains it on hover (tap on a phone). The texts live in
+  index.html as `data-tip` on `<span class="tip">`.
 
 ## Structure
 - `index.html`, `style.css`, `app.js` — the whole front end (no build step).

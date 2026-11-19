@@ -160,3 +160,7 @@ details.cal summary::-webkit-details-marker{display:none}
 .cmp canvas{width:100%;height:auto;display:block;border-radius:6px;background:#000}
 .meta{font-size:13px;color:var(--muted);margin:6px 0 0}
 .drop{position:fixed;inset:0;background:color-mix(in srgb,var(--accent) 22%,transparent);border:3px dashed var(--accent);display:grid;place-items:center;font:700 32px var(--display);text-transform:uppercase;color:var(--ink);z-index:20;pointer-events:none}
+/* help: a ? next to a label, its text shows in one floating box (see tips in app.js) */
+.tip{display:inline-grid;place-items:center;width:15px;height:15px;margin-left:5px;border-radius:50%;border:1px solid var(--muted);color:var(--muted);font:600 10px/1 var(--body);text-transform:none;letter-spacing:0;cursor:help;vertical-align:1px;user-select:none}
+.tip:hover,.tip:focus-visible{color:var(--accent-ink);background:var(--accent);border-color:var(--accent);outline:none}
+#tipBox{position:fixed;z-index:30;max-width:min(320px,calc(100vw - 32px));padding:8px 10px;border-radius:6px;background:var(--ink);color:var(--bg);font:400 13px/1.45 var(--body);text-transform:none;letter-spacing:0;box-shadow:0 4px 14px rgba(0,0,0,.25);pointer-events:none}

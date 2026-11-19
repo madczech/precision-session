@@ -30,7 +30,7 @@
       <div class="panelhead"><h2>1 · Session setup</h2><span class="status" id="setupState"></span></div>
       <div class="setup">
         <div style="display:grid;gap:14px">
-          <div class="field">Fireball <span class="req" id="fbReq">Required. Choose before loading images.</span>
+          <div class="field"><span>Fireball <span class="tip" data-tip="Which ball the launcher fires (Fireball 2, 4 or 5). Choose it first: it is saved with the session and History can be filtered by it.">?</span></span> <span class="req" id="fbReq">Required. Choose before loading images.</span>
             <div class="fbs" id="fbs">
               <button type="button" class="fb" data-fb="2" aria-pressed="false" style="--fbc:var(--fb2)">FB 2<small>Fireball 2</small></button>
               <button type="button" class="fb" data-fb="4" aria-pressed="false" style="--fbc:var(--fb4)">FB 4<small>Fireball 4</small></button>
@@ -38,17 +38,17 @@
             </div>
           </div>
           <div class="row4">
-            <label class="field">Date<input type="date" id="sDate"></label>
-            <label class="field">Operator<input type="text" id="sOp" placeholder="Name"></label>
-            <label class="field">PSI *<input type="number" id="sPsi" step="0.1" min="0" inputmode="decimal" placeholder="e.g. 11.5"></label>
-            <label class="field">Speed km/h *<input type="number" id="sSpeed" step="1" min="0" inputmode="decimal" placeholder="e.g. 90"></label>
+            <label class="field"><span>Date <span class="tip" data-tip="Day the session was shot.">?</span></span><input type="date" id="sDate"></label>
+            <label class="field"><span>Operator <span class="tip" data-tip="Who ran the session.">?</span></span><input type="text" id="sOp" placeholder="Name"></label>
+            <label class="field"><span>PSI * <span class="tip" data-tip="Air pressure of the launcher for this session, as set on the machine.">?</span></span><input type="number" id="sPsi" step="0.1" min="0" inputmode="decimal" placeholder="e.g. 11.5"></label>
+            <label class="field"><span>Speed km/h * <span class="tip" data-tip="Ball speed set on the launcher, in km/h.">?</span></span><input type="number" id="sSpeed" step="1" min="0" inputmode="decimal" placeholder="e.g. 90"></label>
           </div>
           <div class="row4">
-            <label class="field">Cyl. distance mm *<input type="number" id="sCyl" step="0.1" min="0" inputmode="decimal" placeholder="e.g. 210"></label>
-            <label class="field">R1 setting *<input type="number" id="sR1" step="any" inputmode="decimal" placeholder="R1"></label>
-            <label class="field">R2 setting *<input type="number" id="sR2" step="any" inputmode="decimal" placeholder="R2"></label>
+            <label class="field"><span>Cyl. distance mm * <span class="tip" data-tip="Cylinder distance set on the launcher, in millimetres.">?</span></span><input type="number" id="sCyl" step="0.1" min="0" inputmode="decimal" placeholder="e.g. 210"></label>
+            <label class="field"><span>R1 setting * <span class="tip" data-tip="R1 value set on the launcher, as shown on the machine.">?</span></span><input type="number" id="sR1" step="any" inputmode="decimal" placeholder="R1"></label>
+            <label class="field"><span>R2 setting * <span class="tip" data-tip="R2 value set on the launcher, as shown on the machine.">?</span></span><input type="number" id="sR2" step="any" inputmode="decimal" placeholder="R2"></label>
           </div>
-          <div class="field">Calibration (sectors A–E) *</div>
+          <div class="field"><span>Calibration (sectors A–E) * <span class="tip" data-tip="Machine settings for the 5 aiming sectors, typed as x,y exactly as on the machine screen (e.g. -650,630). A = top left, B = top right, C = bottom left, D = bottom right, E = centre. They are only shown in blue on the goal image in History, not used in any calculation.">?</span></span></div>
           <div class="row5">
             <label class="field">A *<input type="text" id="sCalA" placeholder="x,y"></label>
             <label class="field">B *<input type="text" id="sCalB" placeholder="x,y"></label>
@@ -56,10 +56,10 @@
             <label class="field">D *<input type="text" id="sCalD" placeholder="x,y"></label>
             <label class="field">E *<input type="text" id="sCalE" placeholder="x,y"></label>
           </div>
-          <label class="field">Notes (fields marked * are required)<textarea id="sNotes" rows="2" placeholder="Anything unusual: weather, ball condition, launcher issues"></textarea></label>
+          <label class="field"><span>Notes (fields marked * are required) <span class="tip" data-tip="Free text saved with the session: weather, ball condition, launcher problems, anything that explains unusual results.">?</span></span><textarea id="sNotes" rows="2" placeholder="Anything unusual: weather, ball condition, launcher issues"></textarea></label>
         </div>
         <div>
-          <div class="field">Firing order (fixed): all 10 sectors, 5 shots each</div>
+          <div class="field"><span>Firing order (fixed): all 10 sectors, 5 shots each <span class="tip" data-tip="The order the launcher shoots in. Shot 1 is aimed at the first sector shown, and so on. Each shot in the list gets its target sector from this order.">?</span></span></div>
           <div class="planboard" id="planBoard" style="margin-top:6px"></div>
           <div class="plantext" id="planText"></div>
                   </div>
@@ -67,9 +67,9 @@
       <div class="savebar" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
         <div class="gate" id="gateMsg"></div>
         <div class="actions">
-          <button type="button" id="vidBtn" disabled>Analyse video</button>
+          <button type="button" id="vidBtn" disabled title="Load the session video: the shots are found automatically and always fill 50 slots. Shots the video missed stay as empty rows to fill in by hand.">Analyse video</button>
           <input id="vidIn" type="file" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v" hidden>
-          <button class="primary" id="addBtn" type="button" disabled>Load screenshots</button>
+          <button class="primary" id="addBtn" type="button" disabled title="Load one screenshot per shot, in firing order. The ball is found automatically on each one.">Load screenshots</button>
           <input id="fileIn" type="file" accept="image/*" multiple hidden>
         </div>
       </div>
@@ -78,22 +78,22 @@
 
     <section class="panel">
       <div class="panelhead">
-        <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap"><h2>2 · Check</h2><div class="counter" id="counter">0 <small>/ 50 shots</small></div><span class="status" id="status"></span></div>
+        <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap"><h2>2 · Check</h2><div class="counter" id="counter">0 <small>/ 50 shots</small></div> <span class="tip" data-tip="Shots loaded / shots in the firing plan. It turns orange when they do not match. A video session always has 50 slots; missing ones are filled in by hand.">?</span><span class="status" id="status"></span></div>
         <div class="toggles">
           <label><input type="checkbox" id="tNums" checked> Shot numbers</label>
-          <label><input type="checkbox" id="tGrid" checked> Sector grid</label>
+          <label><input type="checkbox" id="tGrid" checked> Sector grid</label> <span class="tip" data-tip="The image shows all balls of the session stacked on one goal picture. Shot numbers labels each ball; Sector grid draws the sector lines.">?</span>
         </div>
       </div>
       <div class="stage" id="stage"><canvas id="stageCv" width="1920" height="1080"></canvas></div>
     </section>
 
     <section class="panel" id="resultsPanel">
-      <div class="panelhead"><h2>Sector results</h2><span class="status" id="resStatus">Load screenshots to see how each sector did.</span></div>
+      <div class="panelhead"><h2>Sector results <span class="tip" data-tip="One card per sector: how many of the 5 shots aimed at it landed inside. Green = all 5 in, orange = 3–4 in, red = 2 or fewer in. Click a ball to open that shot.">?</span></h2><span class="status" id="resStatus">Load screenshots to see how each sector did.</span></div>
       <div class="kpis">
-        <div class="kpi"><div class="v" id="kPerfect">–</div><div class="l">sectors 5 / 5</div></div>
-        <div class="kpi"><div class="v" id="kHit">–</div><div class="l">hit rate</div></div>
-        <div class="kpi"><div class="v" id="kMiss">–</div><div class="l">avg miss cm</div></div>
-        <div class="kpi"><div class="v" id="kSpread">–</div><div class="l">spread cm</div></div>
+        <div class="kpi"><div class="v" id="kPerfect">–</div><div class="l">sectors 5 / 5 <span class="tip" data-tip="Sectors where all 5 shots landed inside the target sector, out of the sectors that were aimed at.">?</span></div></div>
+        <div class="kpi"><div class="v" id="kHit">–</div><div class="l">hit rate <span class="tip" data-tip="Share of shots that landed in the sector they were aimed at. Shots with no ball found are left out.">?</span></div></div>
+        <div class="kpi"><div class="v" id="kMiss">–</div><div class="l">avg miss cm <span class="tip" data-tip="Average distance in cm from each ball to the centre of the sector it was aimed at. Lower is more accurate.">?</span></div></div>
+        <div class="kpi"><div class="v" id="kSpread">–</div><div class="l">spread cm <span class="tip" data-tip="How tightly the 5 shots at one sector group together: the average distance of each ball from the middle of its group, averaged over the sectors. Lower is more consistent, even if the group is off target.">?</span></div></div>
       </div>
       <div class="sgrid" id="sgrid"></div>
       <div class="legend"><span class="dot hit sample"></span> hit &nbsp; <span class="dot miss sample">2</span> miss (number = sector it landed in) &nbsp; <span class="dot none sample"></span> no ball found. Click a ball to open that shot. Spread = how tightly the 5 shots cluster.</div>
@@ -104,7 +104,7 @@
         <h2 id="inspTitle">Shot</h2>
         <div class="actions">
           <button type="button" id="prevBtn">← Prev</button><button type="button" id="nextBtn">Next →</button>
-          <button type="button" id="noBallBtn">No ball</button><button type="button" id="autoBtn">Auto</button><button type="button" class="danger" id="delShotBtn">Delete shot</button><button type="button" id="closeBtn">Close</button>
+          <button type="button" id="noBallBtn" title="This screenshot has no ball (e.g. the ball was not in the air): the shot is left out of the results.">No ball</button><button type="button" id="autoBtn" title="Put back the ball position that was found automatically.">Auto</button><button type="button" class="danger" id="delShotBtn">Delete shot</button><button type="button" id="closeBtn">Close</button>
         </div>
       </div>
       <canvas id="inspCv" width="1920" height="1080"></canvas>
@@ -114,9 +114,9 @@
     <section class="panel">
       <div class="status" id="delState"></div>
       <details class="fold" id="shotsDet">
-        <summary><h2>Shot list</h2><span class="status" id="shotCount"></span></summary>
+        <summary><h2>Shot list</h2> <span class="tip" data-tip="Every shot in firing order. Click a row to see it on its own screenshot and correct the ball. Delete clears a wrong screenshot but keeps the row; Upload adds one for an empty row; Gap before moves an empty video slot to just before that shot.">?</span><span class="status" id="shotCount"></span></summary>
         <div class="tablewrap">
-          <table><thead><tr><th class="num">#</th><th>File</th><th>Target</th><th>Sector</th><th class="num">x cm</th><th class="num">y cm</th><th class="num">Miss cm</th><th>Check</th><th></th></tr></thead><tbody id="tbody"></tbody></table>
+          <table><thead><tr><th class="num">#</th><th>File</th><th>Target <span class="tip" data-tip="Sector the shot was aimed at, from the firing order. Change it if the plan was not followed.">?</span></th><th>Sector <span class="tip" data-tip="Sector the ball actually landed in, with hit (same as target) or miss.">?</span></th><th class="num">x cm <span class="tip" data-tip="Ball position across the goal in cm, measured from the left post.">?</span></th><th class="num">y cm <span class="tip" data-tip="Ball height in cm, measured from the ground.">?</span></th><th class="num">Miss cm <span class="tip" data-tip="Distance in cm from the ball to the centre of its target sector.">?</span></th><th>Check <span class="tip" data-tip="ok / from video = found automatically. borderline = close to a sector line. check / 2+ balls = look at it. corrected = moved by hand. no ball = none found. excluded = marked No ball. missing = empty slot, add it by hand. added by hand = placed manually. duplicate = same screenshot twice.">?</span></th><th></th></tr></thead><tbody id="tbody"></tbody></table>
         </div>
         <div class="empty" id="emptyMsg">No screenshots loaded yet.</div>
       </details>
@@ -136,17 +136,17 @@
 
     <section class="panel">
       <details class="cal" id="cal">
-        <summary>Grid calibration <span class="lock" id="lockPill">Locked</span></summary>
+        <summary>Grid calibration <span class="tip" data-tip="How the camera picture maps onto the goal. Set once and keep it locked; change it only when the camera or goal has moved.">?</span> <span class="lock" id="lockPill">Locked</span></summary>
         <p class="foot" style="margin-top:10px">Every saved session stores the grid it was measured with. Keep the grid locked so sessions stay comparable; unlock only when the camera or goal has moved.</p>
         <div class="calgrid">
-          <label class="field">Columns<input id="gCols" type="number" min="1" max="8"></label>
-          <label class="field">Rows<input id="gRows" type="number" min="1" max="6"></label>
-          <label class="field">Numbering<select id="gOrder"><option value="row">Row by row</option><option value="col">Column by column</option></select></label>
-          <label class="field">Goal width cm<input id="gGW" type="number"></label>
-          <label class="field">Goal height cm<input id="gGH" type="number"></label>
-          <label class="field">Min. ball height cm<input id="gAir" type="number"></label>
-          <label class="field">Brightness threshold<input id="gTh" type="number" min="20" max="250"></label>
-          <label class="field">Borderline within cm<input id="gBd" type="number"></label>
+          <label class="field"><span>Columns <span class="tip" data-tip="Number of sector columns across the goal.">?</span></span><input id="gCols" type="number" min="1" max="8"></label>
+          <label class="field"><span>Rows <span class="tip" data-tip="Number of sector rows from top to bottom.">?</span></span><input id="gRows" type="number" min="1" max="6"></label>
+          <label class="field"><span>Numbering <span class="tip" data-tip="How sectors are numbered: along each row first, or down each column first.">?</span></span><select id="gOrder"><option value="row">Row by row</option><option value="col">Column by column</option></select></label>
+          <label class="field"><span>Goal width cm <span class="tip" data-tip="Real inner width of the goal. Used to turn image pixels into centimetres.">?</span></span><input id="gGW" type="number"></label>
+          <label class="field"><span>Goal height cm <span class="tip" data-tip="Real inner height of the goal. Used to turn image pixels into centimetres.">?</span></span><input id="gGH" type="number"></label>
+          <label class="field"><span>Min. ball height cm <span class="tip" data-tip="Anything lower than this is ignored, so balls lying on the ground are not detected as shots.">?</span></span><input id="gAir" type="number"></label>
+          <label class="field"><span>Brightness threshold <span class="tip" data-tip="How bright a spot must be to count as a ball (20–250). Raise it if background spots are detected, lower it if balls are missed.">?</span></span><input id="gTh" type="number" min="20" max="250"></label>
+          <label class="field"><span>Borderline within cm <span class="tip" data-tip="Balls closer than this to a sector line are marked borderline, so you can check them by eye.">?</span></span><input id="gBd" type="number"></label>
         </div>
         <div class="actions" style="margin-top:14px">
           <button type="button" id="lockBtn">Unlock grid</button>
@@ -164,7 +164,7 @@
   <div id="viewH" class="wrap" style="padding:0;max-width:none" hidden>
     <section class="panel">
       <div class="panelhead">
-        <h2>Trend</h2>
+        <h2>Trend <span class="tip" data-tip="The chosen metric for each saved session over time. Filter by fireball to compare like with like.">?</span></h2>
         <div class="actions">
           <div class="chips" id="fbFilter">
             <button type="button" data-f="all" aria-pressed="true">All</button>
@@ -180,21 +180,21 @@
       <div class="legend" id="chartLegend"></div>
     </section>
     <section class="panel">
-      <div class="panelhead"><h2>Sessions</h2><span class="status">Tick two sessions to compare them side by side.</span></div>
+      <div class="panelhead"><h2>Sessions <span class="tip" data-tip="All saved sessions. Click a row to open and edit it; tick two to compare them side by side.">?</span></h2><span class="status">Tick two sessions to compare them side by side.</span></div>
       <div class="tablewrap">
-        <table><thead><tr><th></th><th>Date</th><th>Fireball</th><th class="num">PSI</th><th class="num">Speed</th><th class="num">Cyl. mm</th><th class="num">R1</th><th class="num">R2</th><th class="num">Shots</th><th class="num">5 / 5</th><th class="num">Hit rate</th><th class="num">Avg miss</th><th class="num">Spread</th><th>Operator</th></tr></thead><tbody id="hBody"></tbody></table>
+        <table><thead><tr><th></th><th>Date</th><th>Fireball <span class="tip" data-tip="Which ball the launcher fires (Fireball 2, 4 or 5). Choose it first: it is saved with the session and History can be filtered by it.">?</span></th><th class="num">PSI</th><th class="num">Speed</th><th class="num">Cyl. mm</th><th class="num">R1</th><th class="num">R2</th><th class="num">Shots <span class="tip" data-tip="Number of shots in the session.">?</span></th><th class="num">5 / 5 <span class="tip" data-tip="Sectors where all 5 shots landed inside the target sector, out of the sectors that were aimed at.">?</span></th><th class="num">Hit rate <span class="tip" data-tip="Share of shots that landed in the sector they were aimed at. Shots with no ball found are left out.">?</span></th><th class="num">Avg miss <span class="tip" data-tip="Average distance in cm from each ball to the centre of the sector it was aimed at. Lower is more accurate. Shown in cm.">?</span></th><th class="num">Spread <span class="tip" data-tip="How tightly the 5 shots at one sector group together: the average distance of each ball from the middle of its group, averaged over the sectors. Lower is more consistent, even if the group is off target. Shown in cm.">?</span></th><th>Operator</th></tr></thead><tbody id="hBody"></tbody></table>
       </div>
       <div class="empty" id="hEmpty">No saved sessions yet. Saved sessions appear here for everyone who uses this page.</div>
     </section>
     <section class="panel" id="cmpPanel" hidden>
-      <div class="panelhead"><h2 id="cmpTitle">Compare</h2><div class="toggles"><label><input type="checkbox" id="cNums" checked> Shot numbers</label></div></div>
+      <div class="panelhead"><h2 id="cmpTitle">Compare</h2> <span class="tip" data-tip="Two sessions side by side: their goal images (with calibration A–E in blue) and settings and results in one table.">?</span><div class="toggles"><label><input type="checkbox" id="cNums" checked> Shot numbers</label></div></div>
       <div class="cmp" id="cmpBox"></div>
       <div class="tablewrap" style="margin-top:14px"><table id="cmpTable"></table></div>
     </section>
     <section class="panel" id="editPanel" hidden>
       <div class="panelhead"><h2 id="eTitle">Edit session</h2><span class="status" id="eState"></span></div>
       <div style="display:grid;gap:14px">
-        <div class="field">Fireball
+        <div class="field"><span>Fireball <span class="tip" data-tip="Which ball the launcher fires (Fireball 2, 4 or 5). Choose it first: it is saved with the session and History can be filtered by it.">?</span></span>
           <div class="fbs" id="eFbs">
             <button type="button" class="fb" data-fb="2" aria-pressed="false" style="--fbc:var(--fb2)">FB 2<small>Fireball 2</small></button>
             <button type="button" class="fb" data-fb="4" aria-pressed="false" style="--fbc:var(--fb4)">FB 4<small>Fireball 4</small></button>
@@ -202,17 +202,17 @@
           </div>
         </div>
         <div class="row4">
-          <label class="field">Date<input type="date" id="eDate"></label>
-          <label class="field">Operator<input type="text" id="eOp" placeholder="Name"></label>
-          <label class="field">PSI *<input type="number" id="ePsi" step="0.1" min="0" inputmode="decimal"></label>
-          <label class="field">Speed km/h *<input type="number" id="eSpeed" step="1" min="0" inputmode="decimal"></label>
+          <label class="field"><span>Date <span class="tip" data-tip="Day the session was shot.">?</span></span><input type="date" id="eDate"></label>
+          <label class="field"><span>Operator <span class="tip" data-tip="Who ran the session.">?</span></span><input type="text" id="eOp" placeholder="Name"></label>
+          <label class="field"><span>PSI * <span class="tip" data-tip="Air pressure of the launcher for this session, as set on the machine.">?</span></span><input type="number" id="ePsi" step="0.1" min="0" inputmode="decimal"></label>
+          <label class="field"><span>Speed km/h * <span class="tip" data-tip="Ball speed set on the launcher, in km/h.">?</span></span><input type="number" id="eSpeed" step="1" min="0" inputmode="decimal"></label>
         </div>
         <div class="row4">
-          <label class="field">Cyl. distance mm *<input type="number" id="eCyl" step="0.1" min="0" inputmode="decimal"></label>
-          <label class="field">R1 setting *<input type="number" id="eR1" step="any" inputmode="decimal"></label>
-          <label class="field">R2 setting *<input type="number" id="eR2" step="any" inputmode="decimal"></label>
+          <label class="field"><span>Cyl. distance mm * <span class="tip" data-tip="Cylinder distance set on the launcher, in millimetres.">?</span></span><input type="number" id="eCyl" step="0.1" min="0" inputmode="decimal"></label>
+          <label class="field"><span>R1 setting * <span class="tip" data-tip="R1 value set on the launcher, as shown on the machine.">?</span></span><input type="number" id="eR1" step="any" inputmode="decimal"></label>
+          <label class="field"><span>R2 setting * <span class="tip" data-tip="R2 value set on the launcher, as shown on the machine.">?</span></span><input type="number" id="eR2" step="any" inputmode="decimal"></label>
         </div>
-        <div class="field">Calibration (sectors A–E)</div>
+        <div class="field"><span>Calibration (sectors A–E) <span class="tip" data-tip="Machine settings for the 5 aiming sectors, typed as x,y exactly as on the machine screen (e.g. -650,630). A = top left, B = top right, C = bottom left, D = bottom right, E = centre. They are only shown in blue on the goal image in History, not used in any calculation.">?</span></span></div>
         <div class="row5">
           <label class="field">A *<input type="text" id="eCalA" placeholder="x,y"></label>
           <label class="field">B *<input type="text" id="eCalB" placeholder="x,y"></label>
@@ -222,7 +222,7 @@
         </div>
         <label class="field">Notes<textarea id="eNotes" rows="2"></textarea></label>
       </div>
-      <div class="panelhead" style="margin:16px 0 8px"><h3>Shots</h3>
+      <div class="panelhead" style="margin:16px 0 8px"><h3>Shots <span class="tip" data-tip="Click a ball on the image (or a row) to select a shot, then click where its ball really is. Load screenshots to check each shot on its original screenshot. Nothing is stored until Save changes.">?</span></h3>
         <div class="actions">
           <div class="toggles"><label><input type="checkbox" id="eNums" checked> Shot numbers</label><label><input type="checkbox" id="eGridEdit"> <span style="color:var(--ink)">Adjust grid (drag corners)</span></label></div>
           <button type="button" id="eGridShared" title="Replace this session's grid with the current shared grid">Use shared grid</button>
@@ -241,24 +241,24 @@
           <h2 id="eInspTitle">Shot</h2>
           <div class="actions">
             <button type="button" id="eiPrev">← Prev</button><button type="button" id="eiNext">Next →</button>
-            <button type="button" id="eiNoBall">No ball</button><button type="button" id="eiAuto">Auto</button><button type="button" class="danger" id="eiDelete">Delete shot</button><button type="button" id="eiClose">Close</button>
+            <button type="button" id="eiNoBall" title="This screenshot has no ball: the shot is left out of the results.">No ball</button><button type="button" id="eiAuto" title="Put back the ball position that was found automatically.">Auto</button><button type="button" class="danger" id="eiDelete">Delete shot</button><button type="button" id="eiClose">Close</button>
           </div>
         </div>
         <canvas id="eInspCv" width="1920" height="1080"></canvas>
         <div class="foot">Click the ball to correct its position. Arrow keys step through shots.</div>
       </div>
       <div class="kpis" style="margin-top:12px">
-        <div class="kpi"><div class="v" id="eKPerfect">–</div><div class="l">sectors 5 / 5</div></div>
-        <div class="kpi"><div class="v" id="eKHit">–</div><div class="l">hit rate</div></div>
-        <div class="kpi"><div class="v" id="eKMiss">–</div><div class="l">avg miss cm</div></div>
-        <div class="kpi"><div class="v" id="eKSpread">–</div><div class="l">spread cm</div></div>
+        <div class="kpi"><div class="v" id="eKPerfect">–</div><div class="l">sectors 5 / 5 <span class="tip" data-tip="Sectors where all 5 shots landed inside the target sector, out of the sectors that were aimed at.">?</span></div></div>
+        <div class="kpi"><div class="v" id="eKHit">–</div><div class="l">hit rate <span class="tip" data-tip="Share of shots that landed in the sector they were aimed at. Shots with no ball found are left out.">?</span></div></div>
+        <div class="kpi"><div class="v" id="eKMiss">–</div><div class="l">avg miss cm <span class="tip" data-tip="Average distance in cm from each ball to the centre of the sector it was aimed at. Lower is more accurate.">?</span></div></div>
+        <div class="kpi"><div class="v" id="eKSpread">–</div><div class="l">spread cm <span class="tip" data-tip="How tightly the 5 shots at one sector group together: the average distance of each ball from the middle of its group, averaged over the sectors. Lower is more consistent, even if the group is off target.">?</span></div></div>
       </div>
       <div class="sgrid" id="eSgrid"></div>
       <div class="status" id="eDelState" style="margin-top:14px"></div>
       <details class="fold" style="margin-top:14px">
-        <summary><h2>Shot list</h2><span class="status">Change targets, mark a shot as no ball or delete a shot uploaded twice.</span></summary>
+        <summary><h2>Shot list</h2> <span class="tip" data-tip="Every shot in firing order. Change a target, mark a shot as No ball (left out of the results), or Delete a wrong screenshot: the row stays empty.">?</span><span class="status">Change targets, mark a shot as no ball or delete a shot uploaded twice.</span></summary>
         <div class="tablewrap">
-          <table><thead><tr><th class="num">#</th><th>File</th><th>Target</th><th>Sector</th><th class="num">Miss cm</th><th>Check</th><th></th></tr></thead><tbody id="eBody"></tbody></table>
+          <table><thead><tr><th class="num">#</th><th>File</th><th>Target <span class="tip" data-tip="Sector the shot was aimed at, from the firing order. Change it if the plan was not followed.">?</span></th><th>Sector <span class="tip" data-tip="Sector the ball actually landed in, with hit (same as target) or miss.">?</span></th><th class="num">Miss cm <span class="tip" data-tip="Distance in cm from the ball to the centre of its target sector.">?</span></th><th>Check <span class="tip" data-tip="ok / from video = found automatically. borderline = close to a sector line. check / 2+ balls = look at it. corrected = moved by hand. no ball = none found. excluded = marked No ball. missing = empty slot, add it by hand. added by hand = placed manually. duplicate = same screenshot twice.">?</span></th><th></th></tr></thead><tbody id="eBody"></tbody></table>
         </div>
       </details>
       <div class="savebar" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
