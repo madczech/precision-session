@@ -46,3 +46,5 @@ Penalty Arena launcher accuracy log. Live at https://precision-session.vercel.ap
 
 ## Deploy
 Every push to `main` deploys to production on Vercel.
+The build copies the page into `public/` and replaces `__V__` in the script and style links with the commit, so
+browsers load the new code after every deploy without a hard refresh.
