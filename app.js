@@ -362,7 +362,7 @@ async function renderCompare(){const ss=picked.map(id=>sessions.find(s=>s._id===
     acts.append(edit,del);d.appendChild(acts);box.appendChild(d);
     cv.width=s.W||1920;cv.height=s.H||1080;const x=cv.getContext('2d'),im=await loadImg(s.imageId);
     if(im)x.drawImage(im,0,0,cv.width,cv.height);else noImage(x,cv);
-    overlay(x,sg2,cv.width,cv.height,(s.shots||[]).filter(q=>q.px).map(q=>({n:q.n,x:q.px.x,y:q.px.y})),{grid:true,nums:$('cNums').checked,k:40});}
+    overlay(x,sg2,cv.width,cv.height,(s.shots||[]).filter(q=>q.px).map(q=>({n:q.n,x:q.px.x,y:q.px.y})),{grid:true,nums:$('cNums').checked,k:40});drawCal(x,sg2,cv.width,cv.height,s.cal);}
   // table
   const sectors=[...new Set(ss.flatMap(s=>s.plan||[]))].sort((a,b)=>a-b);
   let h=`<thead><tr><th></th>${ss.map(s=>`<th class="num"><span class="fbtag" style="--fbc:var(--fb${esc(s.fireball)})">FB ${esc(s.fireball)}</span> ${esc(s.date)}</th>`).join('')}</tr></thead><tbody>`;
@@ -416,13 +416,14 @@ function composeEdit(cv){cv.width=ed.base.width;cv.height=ed.base.height;const x
 async function drawEdit(rows){const s=ed.src,cv=$('eCv'),im=ed.base?null:await loadImg(s.imageId);if(!ed||ed.src!==s)return;const x=cv.getContext('2d');
   if(ed.base)composeEdit(cv);else{cv.width=s.W||1920;cv.height=s.H||1080;if(im)x.drawImage(im,0,0,cv.width,cv.height);else noImage(x,cv);}
   overlay(x,ed.grid,cv.width,cv.height,rows.filter(r=>r.px).map(r=>({n:r.shot,x:r.px.x,y:r.px.y,hl:r.i===ed.sel})),{grid:true,nums:$('eNums').checked,edit:$('eGridEdit').checked,k:40});
-  drawCal(x,ed.grid,cv.width,cv.height);
+  drawCal(x,ed.grid,cv.width,cv.height,Object.fromEntries(CAL.map(k=>[k,$('eCal'+k).value])));
   const p=rows[ed.sel]?.px;if(p){x.strokeStyle='#ffc400';x.lineWidth=4;x.beginPath();x.arc(p.x,p.y,cv.width/60,0,7);x.stroke();}}
-// A-D outside the goal corners (A top-left, B top-right, C bottom-left, D bottom-right), E in the middle
-function drawCal(ctx,g,W,H){const gg=geo(g,W,H),fs=Math.round(W/55),pad=fs*.4;
+// machine calibration as text, same size as the ball numbers (k=40): A-D outside the goal corners
+// (A top-left, B top-right, C bottom-left, D bottom-right), E in the middle
+function drawCal(ctx,g,W,H,cal){if(!cal)return;const gg=geo(g,W,H),fs=Math.round(W/40),pad=fs*.3;
   const at=[['A',0,g.gh,'left','bottom'],['B',g.gw,g.gh,'right','bottom'],['C',0,0,'left','top'],['D',g.gw,0,'right','top'],['E',g.gw/2,g.gh/2,'center','middle']];
   ctx.save();ctx.font=`600 ${fs}px "IBM Plex Mono",monospace`;ctx.lineWidth=W/300;ctx.strokeStyle='rgba(0,0,0,.85)';ctx.fillStyle='#4da3ff';
-  for(const[k,cx,cy,al,bl]of at){const v=$('eCal'+k).value.trim();if(!v)continue;const[px,py]=apply(gg.toPx,cx,cy);
+  for(const[k,cx,cy,al,bl]of at){const v=String(cal[k]??'').trim();if(!v)continue;const[px,py]=apply(gg.toPx,cx,cy);
     ctx.textAlign=al;ctx.textBaseline=bl;const y=bl==='bottom'?py-pad:bl==='top'?py+pad:py;ctx.strokeText(`${k} ${v}`,px,y);ctx.fillText(`${k} ${v}`,px,y);}
   ctx.restore();}
 async function drawEditInsp(rows){const q=ed.shots[ed.sel];if(!q||!q.img)return;const tok=++eInspTok,bmp=await createImageBitmap(q.img);if(tok!==eInspTok||!ed){bmp.close&&bmp.close();return;}
