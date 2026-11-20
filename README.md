@@ -34,10 +34,17 @@ Penalty Arena launcher accuracy log. Live at https://precision-session.vercel.ap
 - A small ? next to each setting, result and column explains it on hover (tap on a phone). The texts live in
   index.html as `data-tip` on `<span class="tip">`.
 
+- Feedback on the app itself: the Feedback button bottom right. "+ Add feedback", then click the part of the page it is
+  about (or "Whole page"), pick Bug / Idea / Unclear, write it, add photos if useful. Everyone can vote 👍/👎 (one vote per
+  browser), comment, change the state (New / In progress / Done / Rejected) and delete. "Show" scrolls to that part and
+  makes it blink. "All" → "Copy for Claude" copies the open items, sorted by votes, as a Markdown brief for Claude Code
+  (or downloads feedback.md when the clipboard is blocked). Give an important block a readable name with `data-fbn="Name"`.
+
 ## Structure
 - `index.html`, `style.css`, `app.js` — the whole front end (no build step).
 - `video.js` — the video analysis (MP4 index reader, decoding, shot finder); runs as a Web Worker.
-- `api/sessions.js`, `api/grid.js`, `api/image.js` — Vercel functions; data in a private Vercel Blob store.
+- `feedback.js` — the Feedback button and panel (loaded after app.js, uses its helpers).
+- `api/sessions.js`, `api/grid.js`, `api/image.js`, `api/feedback.js` — Vercel functions; data in a private Vercel Blob store.
 - `api/_lib.js` — passcode check and helpers.
 
 ## Environment (set in Vercel, never in the repo)
